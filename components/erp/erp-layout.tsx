@@ -10,6 +10,7 @@ import { FixedCostView } from "@/components/erp/fixed-cost-view"
 import { TelecomView } from "@/components/erp/telecom-view"
 import { PrepaidView } from "@/components/erp/prepaid-view"
 import { BusinessIncomeView } from "@/components/erp/business-income-view"
+import { OperatingCostView } from "@/components/erp/operating-cost-view"
 
 export function ErpLayout({ onLogout }: { onLogout: () => void }) {
   const [active, setActive] = useState("dashboard")
@@ -33,6 +34,8 @@ export function ErpLayout({ onLogout }: { onLogout: () => void }) {
             <PrepaidView />
           ) : active === "business-income" ? (
             <BusinessIncomeView />
+          ) : active === "operating-cost" ? (
+            <OperatingCostView />
           ) : (
             <MenuView menuId={active} />
           )}

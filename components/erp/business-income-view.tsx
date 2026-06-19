@@ -524,7 +524,6 @@ export function BusinessIncomeView() {
                         <Field id="detail-phone" label="전화번호" value={detailForm.phone} onChange={(v) => setDetailField("phone", v)} />
                         <Field id="detail-account" label="계좌번호" value={detailForm.account} onChange={(v) => setDetailField("account", v)} />
                         <Field id="detail-address" label="주소" value={detailForm.address} onChange={(v) => setDetailField("address", v)} />
-                        <Field id="detail-revenue" label="총 매출액" value={detailForm.revenue} onChange={(v) => setDetailField("revenue", toCommaNumber(v))} />
                         <div className="flex flex-col gap-1.5">
                           <Label htmlFor="detail-reportType" className="text-xs text-muted-foreground">신고 항목</Label>
                           <select
@@ -547,7 +546,6 @@ export function BusinessIncomeView() {
                         { label: "계좌번호",  value: detail.account },
                         { label: "주소",      value: detail.address },
                         { label: "등록일",    value: detail.registeredAt },
-                        { label: "총 매출액", value: fmt(detail.revenue) },
                         { label: "신고 항목", value: detail.reportType },
                         { label: "비고",      value: detail.memo || "-" },
                       ].map(({ label, value }) => (
@@ -688,16 +686,22 @@ export function BusinessIncomeView() {
                         <Button className="h-10" onClick={handleAddPaymentEntry}>추가</Button>
                       </div>
                     </div>
-                    <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-muted-foreground">
-                      <div className="flex items-center justify-between rounded-md border border-border bg-muted/50 px-3 py-2">
-                        <span>소득세</span>
-                        <span className="font-medium text-foreground">{fmt(paymentPreviewTaxes.incomeTax)}</span>
+                    {paymentForm.reportType === "신고" && Number(paymentForm.amount.replace(/,/g, "")) > 0 && (
+                      <div className="mt-3 grid grid-cols-3 gap-3 text-sm text-muted-foreground">
+                        <div className="flex items-center justify-between rounded-md border border-border bg-muted/50 px-3 py-2">
+                          <span>소득세</span>
+                          <span className="font-medium text-foreground">{fmt(paymentPreviewTaxes.incomeTax)}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-md border border-border bg-muted/50 px-3 py-2">
+                          <span>지방세</span>
+                          <span className="font-medium text-foreground">{fmt(paymentPreviewTaxes.localTax)}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-md border border-border bg-muted/50 px-3 py-2">
+                          <span>실 지급액</span>
+                          <span className="font-medium text-blue-600">{fmt(Number(paymentForm.amount.replace(/,/g, "")) - paymentPreviewTaxes.incomeTax - paymentPreviewTaxes.localTax)}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between rounded-md border border-border bg-muted/50 px-3 py-2">
-                        <span>지방세</span>
-                        <span className="font-medium text-foreground">{fmt(paymentPreviewTaxes.localTax)}</span>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -726,7 +730,6 @@ export function BusinessIncomeView() {
                 <Field id="bi-regno"   label="주민번호"   value={form.regNo}   onChange={(v) => set("regNo", v)}   placeholder="000000-0000000" />
                 <Field id="bi-account" label="계좌번호"   value={form.account} onChange={(v) => set("account", v)} placeholder="은행명 000-000-000000" />
                 <Field id="bi-address" label="주소"       value={form.address} onChange={(v) => set("address", v)} placeholder="시/도 구/군 읍/면/동" />
-                <Field id="bi-revenue" label="총 매출액" value={form.revenue} onChange={(v) => set("revenue", toCommaNumber(v))} placeholder="0" />
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="bi-reportType" className="text-xs text-muted-foreground">신고 항목</Label>
                   <select
@@ -746,14 +749,12 @@ export function BusinessIncomeView() {
             {/* 지급 정보 */}
             <div className="rounded-lg border border-border bg-muted/30 p-4">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">지급 정보</p>
-              <div className="grid grid-cols-2 gap-4 text-sm mb-3">
+              <div className="grid grid-cols-3 gap-4 text-sm mb-3">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="bi-paydate" className="text-xs text-muted-foreground">지급 일자</Label>
                   <Input id="bi-paydate" type="date" value={form.payDate} onChange={(e) => set("payDate", e.target.value)} />
                 </div>
                 <Field id="bi-payment" label="지급액 (원)" value={form.payment} onChange={(v) => set("payment", toCommaNumber(v))} placeholder="0" />
-              </div>
-              <div className="grid grid-cols-1 gap-4 text-sm mb-3">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="bi-payment-reportType" className="text-xs text-muted-foreground">신고 항목</Label>
                   <select
@@ -767,7 +768,7 @@ export function BusinessIncomeView() {
                   </select>
                 </div>
               </div>
-              {Number(form.payment.replace(/,/g, "")) > 0 && (
+              {form.reportType === "신고" && Number(form.payment.replace(/,/g, "")) > 0 && (
                 <div className="grid grid-cols-3 gap-3 text-sm mb-3">
                   <div className="flex items-center justify-between rounded-md border border-border bg-muted/50 px-3 py-2">
                     <span className="text-muted-foreground">소득세</span>
