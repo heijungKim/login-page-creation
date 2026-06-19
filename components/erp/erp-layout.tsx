@@ -11,12 +11,17 @@ import { TelecomView } from "@/components/erp/telecom-view"
 import { PrepaidView } from "@/components/erp/prepaid-view"
 import { BusinessIncomeView } from "@/components/erp/business-income-view"
 import { OperatingCostView } from "@/components/erp/operating-cost-view"
+import { AuditRegionView } from "@/components/erp/audit-region-view"
+import { LeaseView } from "@/components/erp/lease-view"
+import { CorporationsProvider } from "@/components/erp/corporations-context"
+import { ClosedCorporationsView } from "@/components/erp/closed-corporations-view"
 
 export function ErpLayout({ onLogout }: { onLogout: () => void }) {
   const [active, setActive] = useState("dashboard")
   const activeLabel = menuItems.find((m) => m.id === active)?.label ?? "대시보드"
 
   return (
+    <CorporationsProvider>
     <div className="flex h-svh overflow-hidden bg-muted/40">
       <ErpSidebar active={active} onSelect={setActive} />
       <div className="flex min-w-0 flex-1 flex-col">
@@ -36,11 +41,18 @@ export function ErpLayout({ onLogout }: { onLogout: () => void }) {
             <BusinessIncomeView />
           ) : active === "operating-cost" ? (
             <OperatingCostView />
+          ) : active === "audit-region" ? (
+            <AuditRegionView />
+          ) : active === "lease" ? (
+            <LeaseView />
+          ) : active === "closed" ? (
+            <ClosedCorporationsView />
           ) : (
             <MenuView menuId={active} />
           )}
         </main>
       </div>
     </div>
+    </CorporationsProvider>
   )
 }

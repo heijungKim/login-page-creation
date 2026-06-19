@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dialog"
 
 export const CATEGORY_OPTIONS = ["운영 법인", "하위 법인", "상품권 법인", "계약법인(영세)"]
-export const STATUS_OPTIONS = ["활성", "진행중", "대기중", "중지"]
+export const STATUS_OPTIONS = ["활성", "진행중", "대기중", "중지", "폐업"]
 
 export type Corporation = {
   category: string

@@ -1,29 +1,41 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import React, { useMemo, useState } from "react"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   CorporationFormDialog,
   CATEGORY_OPTIONS,
   STATUS_OPTIONS,
   type Corporation,
 } from "@/components/erp/corporation-form-dialog"
+import { useCorporations } from "@/components/erp/corporations-context"
 
 const statusStyles: Record<string, string> = {
   활성: "bg-blue-100 text-blue-700",
   진행중: "bg-yellow-100 text-yellow-700",
   대기중: "bg-gray-200 text-gray-700",
   중지: "bg-red-100 text-red-700",
+  폐업: "bg-stone-300 text-stone-700",
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -79,265 +91,13 @@ const columns: Column[] = [
   { key: "registeredAt", label: "등록일", minWidth: "120px" },
 ]
 
-const initialRows: Corporation[] = [
-  {
-    category: "운영 법인",
-    status: "활성",
-    name: "운영 법인",
-    region: "서울 강남구",
-    openDate: "2019-03-12",
-    bizNo: "123-81-45678",
-    corpNo: "110111-1234567",
-    ceo: "김한빛",
-    auditorDirector: "이사 박정민",
-    shareholder: "김한빛 (60%)",
-    birthDate: "1980-05-20",
-    phone: "010-1234-5678",
-    phonePlan: "5G 프리미엄",
-    bizAddress: "서울 강남구 테헤란로 123",
-    bizEmail: "admin@hanbit.co.kr",
-    account: "신한 110-123-456789",
-    certCorp: "한국전자인증 / C-2024",
-    certPersonal: "yessign / P-1180",
-    certExpiry: "2026-12-31",
-    iros: "hanbit_iros",
-    irosPw: "********",
-    irosUserNo: "IR-558712",
-    hometaxId: "hanbit_tax",
-    hometaxPw: "********",
-    note: "본사 이전 검토 중",
-    registeredAt: "2024-01-15",
-  },
-  {
-    category: "하위 법인",
-    status: "진행중",
-    name: "하위 법인",
-    region: "서울 영등포구",
-    openDate: "2015-07-01",
-    bizNo: "214-88-12345",
-    corpNo: "110111-7654321",
-    ceo: "이대성",
-    auditorDirector: "감사 정수아",
-    shareholder: "이대성 (80%)",
-    birthDate: "1972-11-03",
-    phone: "010-2222-3333",
-    phonePlan: "LTE 표준",
-    bizAddress: "서울 영등포구 여의대로 7",
-    bizEmail: "info@daesung.com",
-    account: "국민 222-33-444555",
-    certCorp: "한국정보인증 / C-3021",
-    certPersonal: "yessign / P-2210",
-    certExpiry: "2027-03-15",
-    iros: "daesung_iros",
-    irosPw: "********",
-    irosUserNo: "IR-220114",
-    hometaxId: "daesung_tax",
-    hometaxPw: "********",
-    note: "",
-    registeredAt: "2023-11-02",
-  },
-  {
-    category: "상품권 법인",
-    status: "대기중",
-    name: "상품권 법인",
-    region: "경기 성남시",
-    openDate: "2021-01-18",
-    bizNo: "305-86-22119",
-    corpNo: "131111-3344556",
-    ceo: "박상품",
-    auditorDirector: "이사 한지원",
-    shareholder: "박상품 (100%)",
-    birthDate: "1985-09-14",
-    phone: "010-3456-7788",
-    phonePlan: "5G 스탠다드",
-    bizAddress: "경기 성남시 분당구 판교로 256",
-    bizEmail: "contact@giftcorp.kr",
-    account: "우리 305-88-221190",
-    certCorp: "한국전자인증 / C-4102",
-    certPersonal: "yessign / P-3315",
-    certExpiry: "2025-08-30",
-    iros: "gift_iros",
-    irosPw: "********",
-    irosUserNo: "IR-330921",
-    hometaxId: "gift_tax",
-    hometaxPw: "********",
-    note: "상품권 발행 한도 점검 필요",
-    registeredAt: "2024-03-21",
-  },
-  {
-    category: "계약법인(영세)",
-    status: "중지",
-    name: "계약법인(영세)",
-    region: "인천 남동구",
-    openDate: "2018-04-22",
-    bizNo: "412-30-55678",
-    corpNo: "120111-9988776",
-    ceo: "정영세",
-    auditorDirector: "감사 김도윤",
-    shareholder: "정영세 (50%)",
-    birthDate: "1978-02-27",
-    phone: "010-9876-5432",
-    phonePlan: "LTE 알뜰",
-    bizAddress: "인천 남동구 논현로 88",
-    bizEmail: "ceo@contract-sme.kr",
-    account: "기업 412-300-556789",
-    certCorp: "한국정보인증 / C-5210",
-    certPersonal: "yessign / P-4420",
-    certExpiry: "2024-11-10",
-    iros: "contract_iros",
-    irosPw: "********",
-    irosUserNo: "IR-440287",
-    hometaxId: "contract_tax",
-    hometaxPw: "********",
-    note: "계약 만료로 영업 중지",
-    registeredAt: "2023-08-09",
-  },
-  {
-    category: "운영 법인",
-    status: "진행중",
-    name: "운영 법인",
-    region: "부산 해운대구",
-    openDate: "2020-09-05",
-    bizNo: "606-81-77234",
-    corpNo: "180111-2211009",
-    ceo: "최운영",
-    auditorDirector: "이사 서민호",
-    shareholder: "최운영 (70%)",
-    birthDate: "1983-12-01",
-    phone: "010-5555-6677",
-    phonePlan: "5G 프리미엄",
-    bizAddress: "부산 해운대구 센텀중앙로 90",
-    bizEmail: "hq@operate2.co.kr",
-    account: "농협 606-8100-77234",
-    certCorp: "한국전자인증 / C-6033",
-    certPersonal: "yessign / P-5530",
-    certExpiry: "2026-06-20",
-    iros: "operate2_iros",
-    irosPw: "********",
-    irosUserNo: "IR-602215",
-    hometaxId: "operate2_tax",
-    hometaxPw: "********",
-    note: "지점 확장 진행 중",
-    registeredAt: "2024-05-30",
-  },
-  {
-    category: "하위 법인",
-    status: "대기중",
-    name: "하위 법인",
-    region: "대전 유성구",
-    openDate: "2022-02-14",
-    bizNo: "708-87-33445",
-    corpNo: "150111-6677889",
-    ceo: "윤하위",
-    auditorDirector: "감사 노은채",
-    shareholder: "윤하위 (90%)",
-    birthDate: "1990-07-19",
-    phone: "010-7788-1122",
-    phonePlan: "5G 스탠다드",
-    bizAddress: "대전 유성구 대학로 99",
-    bizEmail: "sub@subcorp2.kr",
-    account: "하나 708-870-334450",
-    certCorp: "한국정보인증 / C-7044",
-    certPersonal: "yessign / P-6640",
-    certExpiry: "2027-01-25",
-    iros: "subcorp2_iros",
-    irosPw: "********",
-    irosUserNo: "IR-770336",
-    hometaxId: "subcorp2_tax",
-    hometaxPw: "********",
-    note: "설립 후 초기 세팅 대기",
-    registeredAt: "2024-02-14",
-  },
-  {
-    category: "상품권 법인",
-    status: "활성",
-    name: "상품권 법인",
-    region: "서울 마포구",
-    openDate: "2017-11-30",
-    bizNo: "809-85-66012",
-    corpNo: "110111-4455667",
-    ceo: "강상품",
-    auditorDirector: "이사 임수빈",
-    shareholder: "강상품 (65%)",
-    birthDate: "1981-03-08",
-    phone: "010-3344-9900",
-    phonePlan: "5G 프리미엄",
-    bizAddress: "서울 마포구 월드컵북로 120",
-    bizEmail: "sales@giftcorp2.kr",
-    account: "신한 809-850-660120",
-    certCorp: "한국전자인증 / C-8055",
-    certPersonal: "yessign / P-7750",
-    certExpiry: "2026-09-12",
-    iros: "giftcorp2_iros",
-    irosPw: "********",
-    irosUserNo: "IR-880447",
-    hometaxId: "giftcorp2_tax",
-    hometaxPw: "********",
-    note: "",
-    registeredAt: "2023-06-18",
-  },
-  {
-    category: "계약법인(영세)",
-    status: "활성",
-    name: "계약법인(영세)",
-    region: "광주 서구",
-    openDate: "2016-06-09",
-    bizNo: "910-32-11223",
-    corpNo: "200111-1122334",
-    ceo: "한계약",
-    auditorDirector: "감사 오세영",
-    shareholder: "한계약 (55%)",
-    birthDate: "1975-10-16",
-    phone: "010-1212-3434",
-    phonePlan: "LTE 표준",
-    bizAddress: "광주 서구 상무중앙로 50",
-    bizEmail: "ceo@sme2.kr",
-    account: "국민 910-320-112230",
-    certCorp: "한국정보인증 / C-9066",
-    certPersonal: "yessign / P-8860",
-    certExpiry: "2025-12-05",
-    iros: "sme2_iros",
-    irosPw: "********",
-    irosUserNo: "IR-990558",
-    hometaxId: "sme2_tax",
-    hometaxPw: "********",
-    note: "정기 계약 갱신 완료",
-    registeredAt: "2023-09-27",
-  },
-  {
-    category: "운영 법인",
-    status: "중지",
-    name: "운영 법인",
-    region: "경남 창원시",
-    openDate: "2014-08-21",
-    bizNo: "111-81-99887",
-    corpNo: "190111-5566778",
-    ceo: "조운영",
-    auditorDirector: "이사 백승현",
-    shareholder: "조운영 (75%)",
-    birthDate: "1970-04-30",
-    phone: "010-6677-8899",
-    phonePlan: "LTE 알뜰",
-    bizAddress: "경남 창원시 성산구 중앙대로 30",
-    bizEmail: "hq@operate3.co.kr",
-    account: "경남 111-810-998870",
-    certCorp: "한국전자인증 / C-1077",
-    certPersonal: "yessign / P-9970",
-    certExpiry: "2024-07-18",
-    iros: "operate3_iros",
-    irosPw: "********",
-    irosUserNo: "IR-110669",
-    hometaxId: "operate3_tax",
-    hometaxPw: "********",
-    note: "구조조정으로 운영 중지",
-    registeredAt: "2023-04-03",
-  },
-]
-
 export function CorporationsView() {
-  const [rows, setRows] = useState<Corporation[]>(initialRows)
+  const { rows, setRows } = useCorporations()
   const [open, setOpen] = useState(false)
   const [filters, setFilters] = useState<Record<string, string>>({})
+  const [detail, setDetail] = useState<Corporation | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState<Corporation | null>(null)
 
   // 좌측 고정(sticky) 열(구분/상태/법인명)의 누적 left 위치
   const stickyOffsets = [0, 130, 240]
@@ -347,9 +107,22 @@ export function CorporationsView() {
     setRows((prev) => [{ ...corp, registeredAt }, ...prev])
   }
 
+  function handleSave() {
+    if (!editForm) return
+    setRows((prev) => prev.map((r) => (r === detail ? editForm : r)))
+    setDetail(editForm)
+    setIsEditing(false)
+  }
+
+  function setEdit<K extends keyof Corporation>(key: K, value: Corporation[K]) {
+    setEditForm((prev) => prev ? { ...prev, [key]: value } : prev)
+  }
+
   function setFilter(key: string, value: string) {
     setFilters((prev) => ({ ...prev, [key]: value }))
   }
+
+  const activeRows = useMemo(() => rows.filter((r) => r.status !== "폐업"), [rows])
 
   const filteredRows = useMemo(() => {
     const categoryOrder = ["운영 법인", "계약법인(영세)", "하위 법인", "상품권 법인"]
@@ -359,7 +132,7 @@ export function CorporationsView() {
       return i === -1 ? list.length : i
     }
 
-    return rows
+    return activeRows
       .filter((row) =>
         columns.every((col) => {
           const term = filters[col.key]?.trim()
@@ -375,7 +148,7 @@ export function CorporationsView() {
         if (catDiff !== 0) return catDiff
         return orderIndex(statusOrder, a.status) - orderIndex(statusOrder, b.status)
       })
-  }, [rows, filters])
+  }, [activeRows, filters])
 
   return (
     <div className="flex flex-col gap-5">
@@ -383,7 +156,7 @@ export function CorporationsView() {
         <div className="flex flex-col gap-0.5">
           <h2 className="text-xl font-semibold tracking-tight text-foreground">법인 관리</h2>
           <p className="text-sm text-muted-foreground">
-            전체 {rows.length}개 법인 · 현재 {filteredRows.length}개 표시
+            전체 {activeRows.length}개 법인 · 현재 {filteredRows.length}개 표시
           </p>
         </div>
         <Button onClick={() => setOpen(true)} className="gap-1.5">
@@ -453,7 +226,8 @@ export function CorporationsView() {
                   filteredRows.map((row, idx) => (
                     <tr
                       key={idx}
-                      className="group border-b border-border/60 transition-colors last:border-0 hover:bg-accent/50"
+                      className="group cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-accent/50"
+                      onClick={() => setDetail(row)}
                     >
                       {columns.map((col, colIdx) => (
                         <td
@@ -487,6 +261,222 @@ export function CorporationsView() {
       </Card>
 
       <CorporationFormDialog open={open} onOpenChange={setOpen} onSubmit={handleSubmit} />
+
+      <Dialog open={!!detail} onOpenChange={(o) => { if (!o) { setDetail(null); setIsEditing(false) } }}>
+        <DialogContent className="max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-3xl">
+          <DialogHeader className="border-b border-border px-6 py-4">
+            <DialogTitle className="text-base font-semibold">법인 상세 정보</DialogTitle>
+          </DialogHeader>
+
+          {detail && (
+            <>
+              <div className="flex max-h-[calc(90svh-9rem)] flex-col overflow-y-auto px-6 py-5">
+                <div className="flex flex-col gap-4">
+
+                  {/* 기본 정보 – 수정/저장/취소 버튼 위치 */}
+                  <div className="rounded-lg border border-border bg-muted/30 p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">기본 정보</p>
+                      <div className="flex gap-2">
+                        {isEditing && editForm ? (
+                          <>
+                            <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => setIsEditing(false)}>취소</Button>
+                            <Button size="sm" className="h-8 px-3" onClick={handleSave}>저장</Button>
+                          </>
+                        ) : (
+                          <Button variant="ghost" size="sm" className="h-8 px-3" onClick={() => { setEditForm({ ...detail }); setIsEditing(true) }}>수정</Button>
+                        )}
+                      </div>
+                    </div>
+                    {isEditing && editForm ? (
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="flex flex-col gap-1.5">
+                          <Label className="text-xs text-muted-foreground">구분</Label>
+                          <Select value={editForm.category} onValueChange={(v) => setEdit("category", v ?? "")}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>{CATEGORY_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <Label className="text-xs text-muted-foreground">상태</Label>
+                          <Select value={editForm.status} onValueChange={(v) => setEdit("status", v ?? "")}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>{STATUS_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                        <EF label="법인명" value={editForm.name} onChange={(v) => setEdit("name", v)} />
+                        <EF label="지역" value={editForm.region} onChange={(v) => setEdit("region", v)} />
+                        <EF label="개업일" type="date" value={editForm.openDate} onChange={(v) => setEdit("openDate", v)} />
+                        <EF label="사업자 번호" value={editForm.bizNo} onChange={(v) => setEdit("bizNo", v)} />
+                        <EF label="법인 번호" value={editForm.corpNo} onChange={(v) => setEdit("corpNo", v)} />
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
+                        <DetailField label="구분"><CategoryBadge category={detail.category} /></DetailField>
+                        <DetailField label="상태"><StatusBadge status={detail.status} /></DetailField>
+                        <DetailField label="법인명" value={detail.name} />
+                        <DetailField label="지역" value={detail.region} />
+                        <DetailField label="개업일" value={detail.openDate} />
+                        <DetailField label="사업자 번호" value={detail.bizNo} />
+                        <DetailField label="법인 번호" value={detail.corpNo} />
+                      </div>
+                    )}
+                  </div>
+
+                  <EditSection title="대표 / 임원 정보">
+                    {isEditing && editForm ? (
+                      <>
+                        <EF label="법인 대표" value={editForm.ceo} onChange={(v) => setEdit("ceo", v)} />
+                        <EF label="감사/사내이사" value={editForm.auditorDirector} onChange={(v) => setEdit("auditorDirector", v)} />
+                        <EF label="주주" value={editForm.shareholder} onChange={(v) => setEdit("shareholder", v)} />
+                        <EF label="생년월일" type="date" value={editForm.birthDate} onChange={(v) => setEdit("birthDate", v)} />
+                        <EF label="휴대폰 번호" value={editForm.phone} onChange={(v) => setEdit("phone", v)} />
+                        <EF label="휴대폰 요금제" value={editForm.phonePlan} onChange={(v) => setEdit("phonePlan", v)} />
+                      </>
+                    ) : (
+                      <>
+                        <DetailField label="법인 대표" value={detail.ceo} />
+                        <DetailField label="감사/사내이사" value={detail.auditorDirector} />
+                        <DetailField label="주주" value={detail.shareholder} />
+                        <DetailField label="생년월일" value={detail.birthDate} />
+                        <DetailField label="휴대폰 번호" value={detail.phone} />
+                        <DetailField label="휴대폰 요금제" value={detail.phonePlan} />
+                      </>
+                    )}
+                  </EditSection>
+
+                  <EditSection title="사업장 정보">
+                    {isEditing && editForm ? (
+                      <>
+                        <EF label="사업 소재지" value={editForm.bizAddress} onChange={(v) => setEdit("bizAddress", v)} className="col-span-2" />
+                        <EF label="사업자 메일" value={editForm.bizEmail} onChange={(v) => setEdit("bizEmail", v)} />
+                        <EF label="계좌번호" value={editForm.account} onChange={(v) => setEdit("account", v)} className="col-span-2" />
+                      </>
+                    ) : (
+                      <>
+                        <DetailField label="사업 소재지" value={detail.bizAddress} className="col-span-2" />
+                        <DetailField label="사업자 메일" value={detail.bizEmail} />
+                        <DetailField label="계좌번호" value={detail.account} className="col-span-2" />
+                      </>
+                    )}
+                  </EditSection>
+
+                  <EditSection title="인증서">
+                    {isEditing && editForm ? (
+                      <>
+                        <EF label="법인 인증서" value={editForm.certCorp} onChange={(v) => setEdit("certCorp", v)} />
+                        <EF label="개인 인증서" value={editForm.certPersonal} onChange={(v) => setEdit("certPersonal", v)} />
+                        <EF label="인증서 만료일" type="date" value={editForm.certExpiry} onChange={(v) => setEdit("certExpiry", v)} />
+                      </>
+                    ) : (
+                      <>
+                        <DetailField label="법인 인증서" value={detail.certCorp} />
+                        <DetailField label="개인 인증서" value={detail.certPersonal} />
+                        <DetailField label="인증서 만료일" value={detail.certExpiry} />
+                      </>
+                    )}
+                  </EditSection>
+
+                  <EditSection title="인터넷 등기소">
+                    {isEditing && editForm ? (
+                      <>
+                        <EF label="아이디" value={editForm.iros} onChange={(v) => setEdit("iros", v)} />
+                        <EF label="비밀번호" type="password" value={editForm.irosPw} onChange={(v) => setEdit("irosPw", v)} />
+                        <EF label="사용자 등록번호" value={editForm.irosUserNo} onChange={(v) => setEdit("irosUserNo", v)} />
+                      </>
+                    ) : (
+                      <>
+                        <DetailField label="아이디" value={detail.iros} />
+                        <DetailField label="비밀번호" value={detail.irosPw} />
+                        <DetailField label="사용자 등록번호" value={detail.irosUserNo} />
+                      </>
+                    )}
+                  </EditSection>
+
+                  <EditSection title="홈택스 계정">
+                    {isEditing && editForm ? (
+                      <>
+                        <EF label="홈택스 아이디" value={editForm.hometaxId} onChange={(v) => setEdit("hometaxId", v)} />
+                        <EF label="홈택스 비밀번호" type="password" value={editForm.hometaxPw} onChange={(v) => setEdit("hometaxPw", v)} />
+                      </>
+                    ) : (
+                      <>
+                        <DetailField label="홈택스 아이디" value={detail.hometaxId} />
+                        <DetailField label="홈택스 비밀번호" value={detail.hometaxPw} />
+                      </>
+                    )}
+                  </EditSection>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">비고</Label>
+                    {isEditing && editForm ? (
+                      <Textarea value={editForm.note} onChange={(e) => setEdit("note", e.target.value)} rows={3} />
+                    ) : (
+                      <span className="text-sm text-foreground">{detail.note || "-"}</span>
+                    )}
+                  </div>
+
+                  {detail.registeredAt && !isEditing && (
+                    <p className="text-xs text-muted-foreground">등록일: {detail.registeredAt}</p>
+                  )}
+                </div>
+              </div>
+              <DialogFooter className="border-t border-border px-6 py-4">
+                <Button variant="outline" onClick={() => { setDetail(null); setIsEditing(false) }}>닫기</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+function DetailField({
+  label,
+  value,
+  children,
+  className,
+}: {
+  label: string
+  value?: string
+  children?: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={cn("flex flex-col gap-0.5", className)}>
+      <span className="text-[11px] text-muted-foreground">{label}</span>
+      {children ?? <span className="text-sm font-medium text-foreground">{value || "-"}</span>}
+    </div>
+  )
+}
+
+function EditSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <fieldset className="rounded-lg border border-border p-4">
+      <legend className="px-2 text-sm font-semibold text-foreground">{title}</legend>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
+    </fieldset>
+  )
+}
+
+function EF({
+  label,
+  value,
+  onChange,
+  type = "text",
+  className,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  type?: string
+  className?: string
+}) {
+  return (
+    <div className={cn("flex flex-col gap-1.5", className)}>
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   )
 }
