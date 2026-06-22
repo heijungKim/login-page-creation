@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Plus, Pencil, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -10,23 +10,36 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { cn, toCommaNumber } from "@/lib/utils"
+import { ApiError, api } from "@/lib/api"
 
-// ─── 타입 ────────────────────────────────────────────────────────────────────
 type PrepaidEntry = {
-  id: string           // 이름 기반 고유 ID (동일 이름 = 같은 ID)
-  name: string         // 이름
-  amount: number       // 선지급 금액 (이번 건)
-  payDate: string      // 지급 날짜
-  status: string       // 상태
-  memo: string         // 비고
-  registeredAt: string // 등록일
+  id: number
+  personKey: string
+  name: string
+  amount: number
+  payDate: string
+  status: string
+  memo: string
+  registeredAt: string
+}
+
+type PrepaidPersonSummary = {
+  personKey: string
+  name: string
+  latestStatus: string
+  latestPayDate: string
+  paidTotal: number
+  deductedTotal: number
+  netTotal: number
+  entryCount: number
+  latestId: number
 }
 
 const STATUS_OPTIONS = ["진행중", "종결"]
 
 const statusStyles: Record<string, string> = {
   "진행중": "bg-yellow-100 text-yellow-700",
-  "종결":   "bg-gray-200 text-gray-600",
+  "종결": "bg-gray-200 text-gray-600",
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -37,46 +50,23 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-// ─── 샘플 데이터 ─────────────────────────────────────────────────────────────
-const initialRows: PrepaidEntry[] = [
-  { id: "kim-daepyo",  name: "김대표", amount: 500000,  payDate: "2024-01-10", status: "종결",   memo: "1월 생활비 선지급",    registeredAt: "2024-01-10" },
-  { id: "lee-isa",     name: "이이사", amount: 300000,  payDate: "2024-01-15", status: "종결",   memo: "1월 식대",             registeredAt: "2024-01-15" },
-  { id: "kim-daepyo",  name: "김대표", amount: 200000,  payDate: "2024-02-08", status: "종결",   memo: "2월 추가 선지급",       registeredAt: "2024-02-08" },
-  { id: "park-team",   name: "박팀장", amount: 150000,  payDate: "2024-02-20", status: "진행중", memo: "출장비 선지급",         registeredAt: "2024-02-20" },
-  { id: "lee-isa",     name: "이이사", amount: 100000,  payDate: "2024-03-05", status: "종결",   memo: "3월 교통비",           registeredAt: "2024-03-05" },
-  { id: "choi-gamsa",  name: "최감사", amount: 250000,  payDate: "2024-03-10", status: "진행중", memo: "1분기 정산 선지급",     registeredAt: "2024-03-10" },
-  { id: "jung-dir",    name: "정이사", amount: 400000,  payDate: "2024-03-18", status: "종결",   memo: "외부 미팅 경비",       registeredAt: "2024-03-18" },
-  { id: "kim-daepyo",  name: "김대표", amount: 300000,  payDate: "2024-03-25", status: "진행중", memo: "3월 추가",             registeredAt: "2024-03-25" },
-  { id: "park-team",   name: "박팀장", amount: 200000,  payDate: "2024-04-02", status: "종결",   memo: "4월 교통·숙박",        registeredAt: "2024-04-02" },
-  { id: "choi-gamsa",  name: "최감사", amount: 180000,  payDate: "2024-04-10", status: "진행중", memo: "세무 자료 준비 경비",   registeredAt: "2024-04-10" },
-  { id: "jung-dir",    name: "정이사", amount: 350000,  payDate: "2024-04-15", status: "진행중", memo: "4월 운영비 선지급",     registeredAt: "2024-04-15" },
-  { id: "lee-isa",     name: "이이사", amount: 250000,  payDate: "2024-04-20", status: "진행중", memo: "교육 수강료",           registeredAt: "2024-04-20" },
-  { id: "oh-staff",    name: "오직원", amount: 120000,  payDate: "2024-05-03", status: "종결",   memo: "5월 복지비",           registeredAt: "2024-05-03" },
-  { id: "kim-daepyo",  name: "김대표", amount: 500000,  payDate: "2024-05-08", status: "진행중", memo: "5월 대표 선지급",       registeredAt: "2024-05-08" },
-  { id: "oh-staff",    name: "오직원", amount:  80000,  payDate: "2024-05-20", status: "진행중", memo: "야근 식대 선지급",      registeredAt: "2024-05-20" },
-]
+const fmt = (n: number) => Math.round(n).toLocaleString("ko-KR") + "원"
 
-// ─── 금액 포맷 ────────────────────────────────────────────────────────────────
-const fmt = (n: number) => n.toLocaleString("ko-KR") + "원"
-
-// ─── 빈 폼 ───────────────────────────────────────────────────────────────────
 type FormData = { name: string; amount: string; payDate: string; status: string; memo: string }
 const emptyForm: FormData = { name: "", amount: "", payDate: "", status: "진행중", memo: "" }
 
-// ─── 컬럼 정의 ───────────────────────────────────────────────────────────────
 const columns = [
-  { key: "name",         label: "이름",       minWidth: "100px",  filterOptions: undefined },
-  { key: "total",        label: "합계",       minWidth: "120px",  filterOptions: undefined },
-  { key: "paid",         label: "지급 금액",  minWidth: "120px",  filterOptions: undefined },
-  { key: "deducted",     label: "차감 금액",  minWidth: "120px",  filterOptions: undefined },
-  { key: "memo",         label: "비고",       minWidth: "180px",  filterOptions: undefined },
-  { key: "status",       label: "상태",       minWidth: "130px",  filterOptions: STATUS_OPTIONS },
-  { key: "registeredAt", label: "등록일",     minWidth: "110px",  filterOptions: undefined },
+  { key: "name", label: "이름", minWidth: "100px", filterOptions: undefined },
+  { key: "netTotal", label: "합계", minWidth: "120px", filterOptions: undefined },
+  { key: "paidTotal", label: "지급 금액", minWidth: "120px", filterOptions: undefined },
+  { key: "deductedTotal", label: "차감 금액", minWidth: "120px", filterOptions: undefined },
+  { key: "memo", label: "비고", minWidth: "180px", filterOptions: undefined },
+  { key: "status", label: "상태", minWidth: "130px", filterOptions: STATUS_OPTIONS as readonly string[] },
+  { key: "latestPayDate", label: "최근 지급일", minWidth: "120px", filterOptions: undefined },
 ] as const
 
 type ColKey = typeof columns[number]["key"]
 
-// ─── 텍스트 입력 필드 ─────────────────────────────────────────────────────────
 function Field({
   id, label, value, onChange, placeholder, type = "text",
 }: {
@@ -92,102 +82,199 @@ function Field({
   )
 }
 
-// ─── 메인 컴포넌트 ────────────────────────────────────────────────────────────
 export function PrepaidView() {
-  const [rows, setRows] = useState<PrepaidEntry[]>(initialRows)
-  const [open, setOpen] = useState(false)
-  const [detail, setDetail] = useState<PrepaidEntry | null>(null)
   const today = new Date().toISOString().slice(0, 10)
+  const [summaries, setSummaries] = useState<PrepaidPersonSummary[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
+  const [detail, setDetail] = useState<PrepaidPersonSummary | null>(null)
+  const [detailHistory, setDetailHistory] = useState<PrepaidEntry[]>([])
+  const [detailLatest, setDetailLatest] = useState<PrepaidEntry | null>(null)
   const [detailForm, setDetailForm] = useState({ payDate: today, amount: "", memo: "", type: "지급" })
   const [editMode, setEditMode] = useState(false)
   const [editFields, setEditFields] = useState({ name: "", status: "", memo: "" })
   const [form, setForm] = useState<FormData>(emptyForm)
   const [filters, setFilters] = useState<Partial<Record<ColKey, string>>>({})
-
-  // 이름별 누적 합계 맵 (지급/차감 구분)
-  const { totalByName, paidByName, deductedByName } = useMemo(() => {
-    const paid: Record<string, number> = {}
-    const deducted: Record<string, number> = {}
-    rows.forEach((r) => {
-      const v = r.amount ?? 0
-      if (v >= 0) paid[r.id] = (paid[r.id] ?? 0) + v
-      else deducted[r.id] = (deducted[r.id] ?? 0) + Math.abs(v)
-    })
-    const total: Record<string, number> = {}
-    const ids = new Set<string>([...Object.keys(paid), ...Object.keys(deducted)])
-    ids.forEach((id) => {
-      total[id] = (paid[id] ?? 0) - (deducted[id] ?? 0)
-    })
-    return { totalByName: total, paidByName: paid, deductedByName: deducted }
-  }, [rows])
+  const [submitting, setSubmitting] = useState(false)
 
   const set = (k: keyof FormData, v: string) => setForm((p) => ({ ...p, [k]: v }))
   const setFilter = (k: ColKey, v: string) => setFilters((p) => ({ ...p, [k]: v }))
   const setDetailFormField = (k: keyof typeof detailForm, v: string) =>
     setDetailForm((p) => ({ ...p, [k]: v }))
 
-  // 중복 제거 및 필터 적용 및 정렬
-  const filteredRows = useMemo(() => {
-    // 같은 id의 마지막 건만 표시 (최신 건)
-    const uniqueByName: Record<string, PrepaidEntry> = {}
-    rows.forEach((r) => {
-      uniqueByName[r.id] = r
-    })
-    const unique = Object.values(uniqueByName)
+  async function refresh() {
+    setLoading(true)
+    setError(null)
+    try {
+      const list = await api.get<PrepaidPersonSummary[]>("/api/prepaid/grouped")
+      setSummaries(list)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "선지급 목록을 불러오지 못했습니다.")
+    } finally {
+      setLoading(false)
+    }
+  }
 
-    const filtered = unique.filter((row) =>
+  useEffect(() => {
+    void refresh()
+  }, [])
+
+  async function openDetail(row: PrepaidPersonSummary) {
+    setDetail(row)
+    setDetailHistory([])
+    setDetailLatest(null)
+    setDetailForm({ payDate: today, amount: "", memo: "", type: "지급" })
+    setEditMode(false)
+    setSubmitError(null)
+    try {
+      const history = await api.get<PrepaidEntry[]>(`/api/prepaid/by-person/${encodeURIComponent(row.personKey)}`)
+      setDetailHistory(history)
+      const latest = history.find((h) => h.id === row.latestId) ?? history[0] ?? null
+      setDetailLatest(latest)
+      if (latest) {
+        setEditFields({ name: latest.name, status: latest.status, memo: latest.memo || "" })
+      }
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "내역을 불러오지 못했습니다.")
+    }
+  }
+
+  function closeDetail() {
+    setDetail(null)
+    setDetailHistory([])
+    setDetailLatest(null)
+    setDetailForm({ payDate: today, amount: "", memo: "", type: "지급" })
+    setEditMode(false)
+    setSubmitError(null)
+  }
+
+  const filteredSummaries = useMemo(() =>
+    summaries.filter((row) =>
       columns.every((col) => {
         const term = filters[col.key]?.trim()
         if (!term) return true
-        if (col.filterOptions) return String((row as any)[col.key] ?? "") === term
-        if (col.key === "total") return String(totalByName[row.id] ?? 0).includes(term.toLowerCase())
-        if (col.key === "paid") return String(paidByName[row.id] ?? 0).includes(term.toLowerCase())
-        if (col.key === "deducted") return String(deductedByName[row.id] ?? 0).includes(term.toLowerCase())
+        if (col.filterOptions) {
+          if (col.key === "status") return row.latestStatus === term
+          return String((row as any)[col.key] ?? "") === term
+        }
+        if (col.key === "netTotal") return String(row.netTotal).includes(term.replace(/,/g, ""))
+        if (col.key === "paidTotal") return String(row.paidTotal).includes(term.replace(/,/g, ""))
+        if (col.key === "deductedTotal") return String(row.deductedTotal).includes(term.replace(/,/g, ""))
         return String((row as any)[col.key] ?? "").toLowerCase().includes(term.toLowerCase())
       }),
-    )
-    // 정렬: 등록일 최신순, 진행중이 위에
-    return filtered.sort((a, b) => {
-      if (a.status !== b.status) {
-        return a.status === "진행중" ? -1 : 1
+    ).sort((a, b) => {
+      if (a.latestStatus !== b.latestStatus) {
+        return a.latestStatus === "진행중" ? -1 : 1
       }
-      return new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime()
-    })
-  }, [rows, filters, totalByName, paidByName, deductedByName])
+      return new Date(b.latestPayDate).getTime() - new Date(a.latestPayDate).getTime()
+    }),
+    [summaries, filters])
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.name.trim() || !form.amount.trim() || !form.payDate) return
-    const parsed = parseInt(form.amount.replace(/[^0-9]/g, ""), 10)
-    if (isNaN(parsed)) return
-    // 동일 이름이면 기존 id 재사용
-    const existing = rows.find((r) => r.name === form.name.trim())
-    const id = existing ? existing.id : form.name.trim().toLowerCase().replace(/\s+/g, "-")
-    const today = new Date().toISOString().slice(0, 10)
-    setRows((prev) => [
-      ...prev,
-      { id, name: form.name.trim(), amount: parsed, payDate: form.payDate, status: form.status, memo: form.memo, registeredAt: today },
-    ])
-    setForm(emptyForm)
-    setOpen(false)
+    setSubmitError(null)
+    if (!form.name.trim() || !form.amount.trim() || !form.payDate) {
+      setSubmitError("이름, 금액, 지급 날짜는 필수입니다.")
+      return
+    }
+    const parsed = parseInt(form.amount.replace(/[^0-9-]/g, ""), 10)
+    if (isNaN(parsed)) {
+      setSubmitError("금액이 올바르지 않습니다.")
+      return
+    }
+    setSubmitting(true)
+    try {
+      await api.post<PrepaidEntry>("/api/prepaid", {
+        name: form.name.trim(),
+        amount: parsed,
+        payDate: form.payDate,
+        status: form.status,
+        memo: form.memo,
+      })
+      setForm(emptyForm)
+      setOpen(false)
+      await refresh()
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "등록에 실패했습니다.")
+    } finally {
+      setSubmitting(false)
+    }
   }
+
+  async function handleSaveEdit() {
+    if (!detail || !detailLatest) return
+    setSubmitError(null)
+    setSubmitting(true)
+    try {
+      await api.put<PrepaidEntry>(`/api/prepaid/${detailLatest.id}`, {
+        name: editFields.name,
+        personKey: detail.personKey,
+        amount: detailLatest.amount,
+        payDate: detailLatest.payDate,
+        status: editFields.status,
+        memo: editFields.memo,
+      })
+      setEditMode(false)
+      await refresh()
+      await openDetail(detail)
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "수정에 실패했습니다.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleAddDetailEntry() {
+    if (!detail || !detailForm.payDate || !detailForm.amount) return
+    const raw = parseInt(detailForm.amount.replace(/[^0-9]/g, ""), 10)
+    if (isNaN(raw)) return
+    const signed = detailForm.type === "차감" ? -Math.abs(raw) : Math.abs(raw)
+    setSubmitError(null)
+    setSubmitting(true)
+    try {
+      await api.post<PrepaidEntry>("/api/prepaid", {
+        name: detail.name,
+        personKey: detail.personKey,
+        amount: signed,
+        payDate: detailForm.payDate,
+        status: detail.latestStatus,
+        memo: detailForm.memo,
+      })
+      setDetailForm({ payDate: today, amount: "", memo: "", type: "지급" })
+      await refresh()
+      await openDetail(detail)
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "추가에 실패했습니다.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const totalNet = filteredSummaries.reduce((s, r) => s + r.netTotal, 0)
+  const totalPaid = filteredSummaries.reduce((s, r) => s + r.paidTotal, 0)
+  const totalDeducted = filteredSummaries.reduce((s, r) => s + r.deductedTotal, 0)
+
   return (
     <div className="flex flex-col gap-5">
-      {/* 상단 */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-0.5">
           <h2 className="text-xl font-semibold tracking-tight text-foreground">선지급 내역</h2>
           <p className="text-sm text-muted-foreground">
-            전체 {rows.length}건 · 현재 {filteredRows.length}건 표시
+            {loading ? "불러오는 중..." : `전체 ${summaries.length}명 · 현재 ${filteredSummaries.length}명 표시`}
           </p>
         </div>
-        <Button onClick={() => { setForm(emptyForm); setOpen(true) }} className="gap-1.5">
+        <Button onClick={() => { setForm(emptyForm); setOpen(true); setSubmitError(null) }} className="gap-1.5">
           <Plus className="h-4 w-4" aria-hidden="true" />
           선지급 등록
         </Button>
       </div>
 
-      {/* 테이블 */}
+      {error ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">{error}</div>
+      ) : null}
+
       <Card className="overflow-hidden py-0 shadow-sm">
         <CardContent className="p-0">
           <div className="min-h-80 overflow-auto">
@@ -203,7 +290,7 @@ export function PrepaidView() {
                       {col.filterOptions ? (
                         <Select
                           value={filters[col.key] || "__all__"}
-                          onValueChange={(v) => setFilter(col.key as ColKey, v === "__all__" ? "" : (v ?? ""))}
+                          onValueChange={(v) => setFilter(col.key, v === "__all__" ? "" : (v ?? ""))}
                         >
                           <SelectTrigger className="h-8 bg-background text-xs font-normal" aria-label={`${col.label} 필터`}>
                             <span className={filters[col.key] ? "text-foreground" : "text-muted-foreground"}>
@@ -231,69 +318,60 @@ export function PrepaidView() {
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.length === 0 ? (
+                {filteredSummaries.length === 0 ? (
                   <tr>
                     <td colSpan={columns.length} className="h-64 px-4 py-10 text-center text-muted-foreground">
-                      조건에 맞는 내역이 없습��다.
+                      조건에 맞는 내역이 없습니다.
                     </td>
                   </tr>
                 ) : (
-                  filteredRows.map((row, idx) => (
+                  filteredSummaries.map((row) => (
                     <tr
-                      key={idx}
+                      key={row.personKey}
                       className={cn(
                         "group cursor-pointer border-b border-border/50 transition-colors last:border-0 hover:bg-accent/50",
-                        row.status === "종결" ? "bg-muted/40 text-muted-foreground" : "bg-white",
+                        row.latestStatus === "종결" ? "bg-muted/40 text-muted-foreground" : "bg-white",
                       )}
-                      onClick={() => {
-                        setDetail(row)
-                        setDetailForm({ payDate: today, amount: "", memo: "", type: "지급" })
-                      }}
+                      onClick={() => { void openDetail(row) }}
                     >
-                        {columns.map((col) => {
-                          let content: React.ReactNode = "-"
-                          if (col.key === "status") {
-                            content = <StatusBadge status={row.status} />
-                          } else if (col.key === "name") {
-                            content = <span className="font-medium">{row.name}</span>
-                          } else if (col.key === "total") {
-                            const total = totalByName[row.id] ?? 0
-                            content = (
-                              <span className={cn("font-semibold tabular-nums", total > 0 ? "text-blue-600" : total < 0 ? "text-red-600" : "text-foreground")}>
-                                {fmt(total)}
-                              </span>
-                            )
-                          } else if (col.key === "paid") {
-                            content = (
-                              <span className="font-medium tabular-nums">{fmt(paidByName[row.id] ?? 0)}</span>
-                            )
-                          } else if (col.key === "deducted") {
-                            content = (
-                              <span className="font-medium tabular-nums text-red-600">{fmt(deductedByName[row.id] ?? 0)}</span>
-                            )
-                          } else if (col.key === "memo") {
-                            content = <span className="text-muted-foreground">{row.memo || "-"}</span>
-                          } else {
-                            content = (row as any)[col.key] || "-"
-                          }
-                          return (
-                            <td key={col.key} className="whitespace-nowrap px-3 py-2.5 text-foreground">
-                              {content}
-                            </td>
+                      {columns.map((col) => {
+                        let content: React.ReactNode = "-"
+                        if (col.key === "name") {
+                          content = <span className="font-medium">{row.name}</span>
+                        } else if (col.key === "netTotal") {
+                          content = (
+                            <span className={cn("font-semibold tabular-nums", row.netTotal > 0 ? "text-blue-600" : row.netTotal < 0 ? "text-red-600" : "text-foreground")}>
+                              {fmt(row.netTotal)}
+                            </span>
                           )
-                        })}
-                      </tr>
+                        } else if (col.key === "paidTotal") {
+                          content = <span className="font-medium tabular-nums">{fmt(row.paidTotal)}</span>
+                        } else if (col.key === "deductedTotal") {
+                          content = <span className="font-medium tabular-nums text-red-600">{fmt(row.deductedTotal)}</span>
+                        } else if (col.key === "status") {
+                          content = <StatusBadge status={row.latestStatus} />
+                        } else if (col.key === "memo") {
+                          content = <span className="text-muted-foreground">{`(${row.entryCount}건)`}</span>
+                        } else if (col.key === "latestPayDate") {
+                          content = row.latestPayDate
+                        }
+                        return (
+                          <td key={col.key} className="whitespace-nowrap px-3 py-2.5 text-foreground">
+                            {content}
+                          </td>
+                        )
+                      })}
+                    </tr>
                   ))
                 )}
               </tbody>
-              {/* 총합계 */}
-              {filteredRows.length > 0 && (
+              {filteredSummaries.length > 0 && (
                 <tfoot>
                   <tr className="border-t-2 border-border bg-muted/50">
                     <td className="px-3 py-2.5 text-xs font-semibold text-muted-foreground">총합계</td>
-                    <td className={cn("px-3 py-2.5 font-semibold tabular-nums", filteredRows.reduce((sum, r) => sum + (totalByName[r.id] ?? 0), 0) > 0 ? "text-blue-600" : filteredRows.reduce((sum, r) => sum + (totalByName[r.id] ?? 0), 0) < 0 ? "text-red-600" : "text-foreground")}>{fmt(filteredRows.reduce((sum, r) => sum + (totalByName[r.id] ?? 0), 0))}</td>
-                    <td className="px-3 py-2.5 font-semibold tabular-nums">{fmt(filteredRows.reduce((sum, r) => sum + (paidByName[r.id] ?? 0), 0))}</td>
-                    <td className="px-3 py-2.5 font-semibold tabular-nums text-red-600">{fmt(filteredRows.reduce((sum, r) => sum + (deductedByName[r.id] ?? 0), 0))}</td>
+                    <td className={cn("px-3 py-2.5 font-semibold tabular-nums", totalNet > 0 ? "text-blue-600" : totalNet < 0 ? "text-red-600" : "text-foreground")}>{fmt(totalNet)}</td>
+                    <td className="px-3 py-2.5 font-semibold tabular-nums">{fmt(totalPaid)}</td>
+                    <td className="px-3 py-2.5 font-semibold tabular-nums text-red-600">{fmt(totalDeducted)}</td>
                     <td colSpan={columns.length - 4}></td>
                   </tr>
                 </tfoot>
@@ -303,62 +381,51 @@ export function PrepaidView() {
         </CardContent>
       </Card>
 
-      {/* 상세 다이얼로그 */}
-      <Dialog open={!!detail} onOpenChange={(o) => {
-        if (!o) {
-          setDetail(null)
-          setDetailForm({ payDate: today, amount: "", memo: "", type: "지급" })
-          setEditMode(false)
-        }
-      }}>
+      <Dialog open={!!detail} onOpenChange={(o) => { if (!o) closeDetail() }}>
         <DialogContent className="!w-[50vw] !max-w-[50vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>선지급 상세 정보</DialogTitle>
           </DialogHeader>
           {detail && (
             <div className="flex flex-col gap-5 py-2">
+              {submitError ? <p className="text-xs text-destructive">{submitError}</p> : null}
 
-              {/* 기본 정보 */}
               <div className="rounded-lg border border-border bg-muted/30 p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">기본 정보</p>
-                  {!editMode ? (
+                  {detailLatest && !editMode ? (
                     <Button
                       variant="ghost" size="sm"
                       className="h-7 gap-1 px-2 text-xs"
-                      onClick={() => { setEditMode(true); setEditFields({ name: detail.name, status: detail.status, memo: detail.memo || "" }) }}
+                      onClick={() => {
+                        setEditMode(true)
+                        setEditFields({ name: detailLatest.name, status: detailLatest.status, memo: detailLatest.memo || "" })
+                      }}
                     >
                       <Pencil className="h-3 w-3" />수정
                     </Button>
-                  ) : (
+                  ) : detailLatest ? (
                     <div className="flex gap-1">
                       <Button
                         variant="ghost" size="sm"
                         className="h-7 gap-1 px-2 text-xs text-green-600 hover:text-green-700"
-                        onClick={() => {
-                          setRows((prev) => prev.map((r) =>
-                            r.id === detail.id
-                              ? { ...r, name: editFields.name, status: editFields.status, memo: editFields.memo }
-                              : r
-                          ))
-                          setDetail((prev) => prev ? { ...prev, name: editFields.name, status: editFields.status, memo: editFields.memo } : prev)
-                          setEditMode(false)
-                        }}
+                        disabled={submitting}
+                        onClick={handleSaveEdit}
                       >
                         <Check className="h-3 w-3" />저장
                       </Button>
                       <Button
                         variant="ghost" size="sm"
                         className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                        disabled={submitting}
                         onClick={() => setEditMode(false)}
                       >
                         <X className="h-3 w-3" />취소
                       </Button>
                     </div>
-                  )}
+                  ) : null}
                 </div>
                 <div className="flex flex-col gap-3 text-sm">
-                  {/* 첫째 줄: 이름 / 상태 / 등록일 */}
                   <div className="flex items-center gap-6">
                     <div className="flex items-center gap-2">
                       <span className="shrink-0 text-muted-foreground">이름</span>
@@ -389,15 +456,10 @@ export function PrepaidView() {
                           </SelectContent>
                         </Select>
                       ) : (
-                        <StatusBadge status={detail.status} />
+                        <StatusBadge status={detail.latestStatus} />
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="shrink-0 text-muted-foreground">등록일</span>
-                      <span>{detail.registeredAt}</span>
-                    </div>
                   </div>
-                  {/* 둘째 줄: 메모 */}
                   <div className="flex items-center gap-2">
                     <span className="shrink-0 text-muted-foreground">메모</span>
                     {editMode ? (
@@ -408,61 +470,53 @@ export function PrepaidView() {
                         placeholder="메모 입력"
                       />
                     ) : (
-                      <span className="text-muted-foreground">{detail.memo || "-"}</span>
+                      <span className="text-muted-foreground">{detailLatest?.memo || "-"}</span>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* 선지급 내역 */}
               <div className="rounded-lg border border-border bg-muted/30 p-4">
                 <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">선지급 내역</p>
 
-                {/* 기존 내역 리스트 */}
-                {(() => {
-                  const history = rows
-                    .filter((r) => r.id === detail.id)
-                    .sort((a, b) => new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime())
-                  return history.length > 0 ? (
-                    <div className="mb-4 overflow-hidden rounded-md border border-border">
-                      <table className="w-full text-sm">
-                        <thead>
-                              <tr className="bg-muted/60 text-left text-xs text-muted-foreground">
-                                <th className="px-3 py-2 font-medium">선지급 일자</th>
-                                <th className="px-3 py-2 font-medium">구분</th>
-                                <th className="px-3 py-2 font-medium">금액</th>
-                                <th className="px-3 py-2 font-medium">비고</th>
-                                <th className="px-3 py-2 font-medium">등록일</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {history.map((r, i) => (
-                                <tr key={i} className="border-t border-border/50">
-                                  <td className="px-3 py-2 tabular-nums">{r.payDate}</td>
-                                  <td className="px-3 py-2">{r.amount >= 0 ? "지급" : "차감"}</td>
-                                  <td className={cn("px-3 py-2 font-medium tabular-nums", r.amount >= 0 ? "text-blue-600" : "text-red-600")}>{fmt(Math.abs(r.amount))}</td>
-                                  <td className="px-3 py-2 text-muted-foreground">{r.memo || "-"}</td>
-                                  <td className="px-3 py-2 tabular-nums text-muted-foreground">{r.registeredAt}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                            <tfoot>
-                              <tr className="border-t-2 border-border bg-muted/40">
-                                <td className="px-3 py-2 text-xs font-semibold text-muted-foreground">지급 합계</td>
-                                <td className="px-3 py-2 font-bold tabular-nums text-blue-600">{fmt(paidByName[detail.id] ?? 0)}</td>
-                                <td className="px-3 py-2 text-xs font-semibold text-muted-foreground">차감 합계</td>
-                                <td className="px-3 py-2 font-bold tabular-nums text-red-600">{fmt(deductedByName[detail.id] ?? 0)}</td>
-                                <td className={cn("px-3 py-2 font-bold tabular-nums", (totalByName[detail.id] ?? 0) > 0 ? "text-blue-600" : (totalByName[detail.id] ?? 0) < 0 ? "text-red-600" : "text-foreground")}>순합계 {fmt(totalByName[detail.id] ?? 0)}</td>
-                              </tr>
-                            </tfoot>
-                      </table>
-                    </div>
-                  ) : (
-                    <p className="mb-4 text-xs text-muted-foreground">등록된 내역이 없습니다.</p>
-                  )
-                })()}
+                {detailHistory.length > 0 ? (
+                  <div className="mb-4 overflow-hidden rounded-md border border-border">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-muted/60 text-left text-xs text-muted-foreground">
+                          <th className="px-3 py-2 font-medium">선지급 일자</th>
+                          <th className="px-3 py-2 font-medium">구분</th>
+                          <th className="px-3 py-2 font-medium">금액</th>
+                          <th className="px-3 py-2 font-medium">비고</th>
+                          <th className="px-3 py-2 font-medium">등록일</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detailHistory.map((r) => (
+                          <tr key={r.id} className="border-t border-border/50">
+                            <td className="px-3 py-2 tabular-nums">{r.payDate}</td>
+                            <td className="px-3 py-2">{r.amount >= 0 ? "지급" : "차감"}</td>
+                            <td className={cn("px-3 py-2 font-medium tabular-nums", r.amount >= 0 ? "text-blue-600" : "text-red-600")}>{fmt(Math.abs(r.amount))}</td>
+                            <td className="px-3 py-2 text-muted-foreground">{r.memo || "-"}</td>
+                            <td className="px-3 py-2 tabular-nums text-muted-foreground">{r.registeredAt}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-border bg-muted/40">
+                          <td className="px-3 py-2 text-xs font-semibold text-muted-foreground">지급 합계</td>
+                          <td className="px-3 py-2 font-bold tabular-nums text-blue-600">{fmt(detail.paidTotal)}</td>
+                          <td className="px-3 py-2 text-xs font-semibold text-muted-foreground">차감 합계</td>
+                          <td className="px-3 py-2 font-bold tabular-nums text-red-600">{fmt(detail.deductedTotal)}</td>
+                          <td className={cn("px-3 py-2 font-bold tabular-nums", detail.netTotal > 0 ? "text-blue-600" : detail.netTotal < 0 ? "text-red-600" : "text-foreground")}>순합계 {fmt(detail.netTotal)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="mb-4 text-xs text-muted-foreground">등록된 내역이 없습니다.</p>
+                )}
 
-                {/* 추��� 폼 */}
                 <div className="flex flex-col gap-3 rounded-md border border-dashed border-border p-3">
                   <p className="text-xs font-medium text-muted-foreground">내역 추가</p>
                   <div className="grid grid-cols-4 gap-2">
@@ -511,18 +565,8 @@ export function PrepaidView() {
                   <Button
                     type="button" size="sm"
                     className="self-end"
-                    onClick={() => {
-                      if (!detailForm.payDate || !detailForm.amount) return
-                      const parsedRaw = parseInt(detailForm.amount.replace(/[^0-9]/g, ""), 10)
-                      if (isNaN(parsedRaw)) return
-                      const parsed = detailForm.type === "차감" ? -Math.abs(parsedRaw) : Math.abs(parsedRaw)
-                      const today = new Date().toISOString().slice(0, 10)
-                      setRows((prev) => [
-                        ...prev,
-                        { id: detail.id, name: detail.name, amount: parsed, payDate: detailForm.payDate, status: detail.status, memo: detailForm.memo, registeredAt: today },
-                      ])
-                      setDetailForm({ payDate: "", amount: "", memo: "", type: "지급" })
-                    }}
+                    disabled={submitting}
+                    onClick={handleAddDetailEntry}
                   >
                     <Plus className="mr-1 h-3.5 w-3.5" />추가
                   </Button>
@@ -531,12 +575,11 @@ export function PrepaidView() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setDetail(null); setDetailForm({ payDate: "", amount: "", memo: "", type: "지급" }); setEditMode(false) }}>닫기</Button>
+            <Button variant="outline" onClick={closeDetail}>닫기</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* 등록 다이얼로그 */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -544,18 +587,18 @@ export function PrepaidView() {
           </DialogHeader>
           <ScrollArea className="max-h-[60vh]">
             <form id="prepaid-form" onSubmit={handleSubmit} className="flex flex-col gap-4 px-1 py-2">
-              <Field id="pp-name" label="이름 *" value={form.name} onChange={(v) => set("name", v)}
-                placeholder="예: 김대표" />
+              {submitError ? <p className="text-xs text-destructive">{submitError}</p> : null}
+              <Field id="pp-name" label="이름 *" value={form.name} onChange={(v) => set("name", v)} placeholder="예: 김대표" />
               <p className="text-xs text-muted-foreground -mt-2">
                 동일한 이름 입력 시 선지급 합계에 자동으로 누적됩니다.
               </p>
-              <Field id="pp-amount" label="선지급 금액 (���) *" value={form.amount}
+              <Field id="pp-amount" label="선지급 금액 (원) *" value={form.amount}
                 onChange={(v) => set("amount", toCommaNumber(v))} placeholder="예: 500,000" />
               <Field id="pp-paydate" label="지급 날짜 *" value={form.payDate}
                 onChange={(v) => set("payDate", v)} type="date" />
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="pp-status" className="text-xs text-muted-foreground">상태</Label>
-                <Select value={form.status} onValueChange={(v) => set("status" as keyof FormData, v ?? "")}>
+                <Select value={form.status} onValueChange={(v) => set("status", v ?? "")}>
                   <SelectTrigger id="pp-status">
                     <span>{form.status}</span>
                   </SelectTrigger>
@@ -571,8 +614,8 @@ export function PrepaidView() {
             </form>
           </ScrollArea>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>취소</Button>
-            <Button type="submit" form="prepaid-form">등록</Button>
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => setOpen(false)}>취소</Button>
+            <Button type="submit" form="prepaid-form" disabled={submitting}>{submitting ? "등록 중..." : "등록"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

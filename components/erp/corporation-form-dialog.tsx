@@ -25,6 +25,7 @@ export const CATEGORY_OPTIONS = ["운영 법인", "하위 법인", "상품권 �
 export const STATUS_OPTIONS = ["활성", "진행중", "대기중", "중지", "폐업"]
 
 export type Corporation = {
+  id?: number
   category: string
   status: string
   name: string
@@ -51,6 +52,8 @@ export type Corporation = {
   hometaxPw: string
   note: string
   registeredAt?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 const emptyForm: Corporation = {
@@ -128,19 +131,27 @@ export function CorporationFormDialog({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSubmit: (corp: Corporation) => void
+  onSubmit: (corp: Corporation) => Promise<void> | void
 }) {
   const [form, setForm] = useState<Corporation>(emptyForm)
+  const [submitting, setSubmitting] = useState(false)
 
   function set<K extends keyof Corporation>(key: K, value: Corporation[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    onSubmit(form)
-    setForm(emptyForm)
-    onOpenChange(false)
+    setSubmitting(true)
+    try {
+      await onSubmit(form)
+      setForm(emptyForm)
+      onOpenChange(false)
+    } catch {
+      // 실패 시 폼을 유지하고 상위에서 에러 메시지를 노출한다.
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -242,10 +253,10 @@ export function CorporationFormDialog({
           </div>
 
           <DialogFooter className="border-t border-border px-6 py-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => onOpenChange(false)}>
               취소
             </Button>
-            <Button type="submit">등록</Button>
+            <Button type="submit" disabled={submitting}>{submitting ? "등록 중..." : "등록"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

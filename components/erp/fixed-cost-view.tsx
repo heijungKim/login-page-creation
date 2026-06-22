@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -21,35 +21,42 @@ import {
   SelectTrigger,
 } from "@/components/ui/select"
 import { cn, toCommaNumber } from "@/lib/utils"
-
-// ── 타입 ────────────────────────────────────────────────────────────────────
+import { ApiError, api } from "@/lib/api"
 
 type FixedCost = {
-  category: string          // 구분
-  categoryEtc: string       // 기타 직접 입력
-  item: string              // 비용항목
-  amount: string            // 금액
-  cycle: string             // 지급주기
-  payDay: string            // 지급일
-  payType: string           // 지급 타입
-  account: string           // 지급 계좌
-  memo: string              // 메모
-  registeredAt: string      // 등록일
+  id: number
+  corporationId: number | null
+  category: string
+  categoryEtc: string
+  item: string
+  amount: number
+  cycle: string
+  payDay: string
+  payType: string
+  account: string
+  memo: string
+  registeredAt: string
 }
 
-// ── 상수 ────────────────────────────────────────────────────────────────────
+type PageResponse<T> = {
+  content: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
 
 const CATEGORY_OPTIONS = ["임대료", "관리비", "통신비", "인건비", "4대보험비", "기타"]
-const CYCLE_OPTIONS    = ["매일", "매주", "매월"]
+const CYCLE_OPTIONS = ["매일", "매주", "매월"]
 const PAY_TYPE_OPTIONS = ["선불", "후불", "기타"]
 
 const categoryStyles: Record<string, string> = {
-  임대료:   "bg-sky-100 text-sky-700",
-  관리비:   "bg-violet-100 text-violet-700",
-  통신비:   "bg-teal-100 text-teal-700",
-  인건비:   "bg-orange-100 text-orange-700",
+  임대료: "bg-sky-100 text-sky-700",
+  관리비: "bg-violet-100 text-violet-700",
+  통신비: "bg-teal-100 text-teal-700",
+  인건비: "bg-orange-100 text-orange-700",
   "4대보험비": "bg-pink-100 text-pink-700",
-  기타:     "bg-slate-200 text-slate-600",
+  기타: "bg-slate-200 text-slate-600",
 }
 
 const payTypeStyles: Record<string, string> = {
@@ -57,19 +64,6 @@ const payTypeStyles: Record<string, string> = {
   후불: "bg-amber-100 text-amber-700",
   기타: "bg-slate-200 text-slate-600",
 }
-
-// ── 샘플 데이터 ─────────────────────────────────────────────────────────────
-
-const initialRows: FixedCost[] = [
-  { category: "임대료",    categoryEtc: "", item: "사무실 임대료",   amount: "3,200,000", cycle: "매월", payDay: "5일",  payType: "선불", account: "국민 123-456-789012", memo: "",              registeredAt: "2024-01-10" },
-  { category: "관리비",    categoryEtc: "", item: "건물 관리비",     amount: "320,000",   cycle: "매월", payDay: "10일", payType: "후불", account: "신한 110-234-567890", memo: "",              registeredAt: "2024-01-10" },
-  { category: "통신비",    categoryEtc: "", item: "인터넷/전화",     amount: "150,000",   cycle: "매월", payDay: "15일", payType: "후불", account: "우리 1002-345-678901", memo: "회선 2개",     registeredAt: "2024-02-01" },
-  { category: "인건비",    categoryEtc: "", item: "직원 급여",       amount: "28,000,000",cycle: "매월", payDay: "25일", payType: "후불", account: "기업 123-456-7890123", memo: "세전 기준",    registeredAt: "2024-01-01" },
-  { category: "4대보험비", categoryEtc: "", item: "사업주 부담분",   amount: "2,850,000", cycle: "매월", payDay: "10일", payType: "후불", account: "농협 301-234-5678901", memo: "",             registeredAt: "2024-01-01" },
-  { category: "기타",      categoryEtc: "회계 프로그램", item: "회계 프로그램 구독료", amount: "150,000", cycle: "매월", payDay: "1일", payType: "선불", account: "하나 123-456789-01011", memo: "ERP 라이선스", registeredAt: "2024-03-15" },
-]
-
-// ── 컬럼 정의 ────────────────────────────────────────────────────────────────
 
 type Column = {
   key: keyof FixedCost
@@ -79,20 +73,18 @@ type Column = {
 }
 
 const columns: Column[] = [
-  { key: "category",    label: "구분",      minWidth: "130px", filterOptions: CATEGORY_OPTIONS },
-  { key: "item",        label: "비용항목",  minWidth: "160px" },
-  { key: "amount",      label: "금액",      minWidth: "130px" },
-  { key: "cycle",       label: "지급주기",  minWidth: "110px", filterOptions: CYCLE_OPTIONS },
-  { key: "payDay",      label: "지급일",    minWidth: "100px" },
-  { key: "payType",     label: "지급타입",  minWidth: "110px", filterOptions: PAY_TYPE_OPTIONS },
-  { key: "account",     label: "지급계좌",  minWidth: "200px" },
-  { key: "memo",        label: "메모",      minWidth: "180px" },
-  { key: "registeredAt",label: "등록일",    minWidth: "110px" },
+  { key: "category", label: "구분", minWidth: "130px", filterOptions: CATEGORY_OPTIONS },
+  { key: "item", label: "비용항목", minWidth: "160px" },
+  { key: "amount", label: "금액", minWidth: "130px" },
+  { key: "cycle", label: "지급주기", minWidth: "110px", filterOptions: CYCLE_OPTIONS },
+  { key: "payDay", label: "지급일", minWidth: "100px" },
+  { key: "payType", label: "지급타입", minWidth: "110px", filterOptions: PAY_TYPE_OPTIONS },
+  { key: "account", label: "지급계좌", minWidth: "200px" },
+  { key: "memo", label: "메모", minWidth: "180px" },
+  { key: "registeredAt", label: "등록일", minWidth: "110px" },
 ]
 
-const stickyOffsets = [0, 130, 290]   // category(130) + item(160)
-
-// ── 배지 컴포넌트 ────────────────────────────────────────────────────────────
+const stickyOffsets = [0, 130, 290]
 
 function Chip({ label, styleMap }: { label: string; styleMap: Record<string, string> }) {
   return (
@@ -101,8 +93,6 @@ function Chip({ label, styleMap }: { label: string; styleMap: Record<string, str
     </span>
   )
 }
-
-// ── 폼 필드 헬퍼 ─────────────────────────────────────────────────────────────
 
 function Field({ id, label, value, onChange, placeholder, type = "text" }: {
   id: string; label: string; value: string
@@ -116,9 +106,19 @@ function Field({ id, label, value, onChange, placeholder, type = "text" }: {
   )
 }
 
-// ── 등록 다이얼로그 ──────────────────────────────────────────────────────────
+type FormState = {
+  category: string
+  categoryEtc: string
+  item: string
+  amount: string
+  cycle: string
+  payDay: string
+  payType: string
+  account: string
+  memo: string
+}
 
-const emptyForm: Omit<FixedCost, "registeredAt"> = {
+const emptyForm: FormState = {
   category: "임대료", categoryEtc: "", item: "", amount: "",
   cycle: "매월", payDay: "", payType: "선불", account: "", memo: "",
 }
@@ -126,16 +126,24 @@ const emptyForm: Omit<FixedCost, "registeredAt"> = {
 function FixedCostDialog({ open, onOpenChange, onSubmit }: {
   open: boolean
   onOpenChange: (v: boolean) => void
-  onSubmit: (data: Omit<FixedCost, "registeredAt">) => void
+  onSubmit: (data: FormState) => Promise<void> | void
 }) {
-  const [form, setForm] = useState<Omit<FixedCost, "registeredAt">>(emptyForm)
-  const set = (k: keyof typeof emptyForm, v: string) => setForm((p) => ({ ...p, [k]: v }))
+  const [form, setForm] = useState<FormState>(emptyForm)
+  const [submitting, setSubmitting] = useState(false)
+  const set = (k: keyof FormState, v: string) => setForm((p) => ({ ...p, [k]: v }))
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    onSubmit(form)
-    setForm(emptyForm)
-    onOpenChange(false)
+    setSubmitting(true)
+    try {
+      await onSubmit(form)
+      setForm(emptyForm)
+      onOpenChange(false)
+    } catch {
+      // 부모에서 에러 노출
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -146,7 +154,6 @@ function FixedCostDialog({ open, onOpenChange, onSubmit }: {
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-5 py-2">
 
-          {/* 구분 */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="fc-category" className="text-xs text-muted-foreground">구분</Label>
             <Select value={form.category} onValueChange={(v) => set("category", v)}>
@@ -159,21 +166,17 @@ function FixedCostDialog({ open, onOpenChange, onSubmit }: {
             </Select>
           </div>
 
-          {/* 기타 구분 직접 입력 */}
           {form.category === "기타" && (
             <Field id="fc-category-etc" label="기타 구분 입력" value={form.categoryEtc}
               onChange={(v) => set("categoryEtc", v)} placeholder="구분명을 입력하세요" />
           )}
 
-          {/* 비용항목 */}
           <Field id="fc-item" label="비용항목" value={form.item}
             onChange={(v) => set("item", v)} placeholder="예: 사무실 임대료" />
 
-          {/* 금액 */}
           <Field id="fc-amount" label="금액 (원)" value={form.amount}
             onChange={(v) => set("amount", toCommaNumber(v))} placeholder="예: 3,200,000" />
 
-          {/* 지급주기 / 지급일 */}
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="fc-cycle" className="text-xs text-muted-foreground">지급주기</Label>
@@ -188,7 +191,6 @@ function FixedCostDialog({ open, onOpenChange, onSubmit }: {
               onChange={(v) => set("payDay", v)} placeholder="예: 5일 / 매주 월요일" />
           </div>
 
-          {/* 지급 타입 */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="fc-paytype" className="text-xs text-muted-foreground">지급 타입</Label>
             <Select value={form.payType} onValueChange={(v) => set("payType", v)}>
@@ -199,11 +201,9 @@ function FixedCostDialog({ open, onOpenChange, onSubmit }: {
             </Select>
           </div>
 
-          {/* 지급 계좌 */}
           <Field id="fc-account" label="지급 계좌" value={form.account}
             onChange={(v) => set("account", v)} placeholder="예: 국민 123-456-789012" />
 
-          {/* 메모 */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="fc-memo" className="text-xs text-muted-foreground">메모</Label>
             <Textarea id="fc-memo" value={form.memo} onChange={(e) => set("memo", e.target.value)}
@@ -211,8 +211,8 @@ function FixedCostDialog({ open, onOpenChange, onSubmit }: {
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>취소</Button>
-            <Button type="submit">등록</Button>
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => onOpenChange(false)}>취소</Button>
+            <Button type="submit" disabled={submitting}>{submitting ? "등록 중..." : "등록"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -220,14 +220,32 @@ function FixedCostDialog({ open, onOpenChange, onSubmit }: {
   )
 }
 
-// ── 메인 뷰 ─────────────────────────────────────────────────────────────────
-
 export function FixedCostView() {
-  const [rows, setRows] = useState<FixedCost[]>(initialRows)
+  const [rows, setRows] = useState<FixedCost[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [filters, setFilters] = useState<Record<string, string>>({})
 
   const setFilter = (k: string, v: string) => setFilters((p) => ({ ...p, [k]: v }))
+
+  async function refresh() {
+    setLoading(true)
+    setError(null)
+    try {
+      const page = await api.get<PageResponse<FixedCost>>("/api/fixed-costs?size=200")
+      setRows(page.content)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "고정 비용 목록을 불러오지 못했습니다.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void refresh()
+  }, [])
 
   const filteredRows = useMemo(() => {
     return rows.filter((row) =>
@@ -235,14 +253,34 @@ export function FixedCostView() {
         const term = filters[col.key]?.trim()
         if (!term) return true
         if (col.filterOptions) return String(row[col.key]) === term
+        if (col.key === "amount") {
+          return String(row.amount).includes(term.replace(/,/g, ""))
+        }
         return String(row[col.key] ?? "").toLowerCase().includes(term.toLowerCase())
       }),
     )
   }, [rows, filters])
 
-  function handleSubmit(data: Omit<FixedCost, "registeredAt">) {
-    const registeredAt = new Date().toISOString().slice(0, 10)
-    setRows((prev) => [{ ...data, registeredAt }, ...prev])
+  async function handleSubmit(data: FormState) {
+    setSubmitError(null)
+    try {
+      await api.post<FixedCost>("/api/fixed-costs", {
+        category: data.category,
+        categoryEtc: data.categoryEtc,
+        item: data.item,
+        amount: Number(data.amount.replace(/,/g, "")) || 0,
+        cycle: data.cycle,
+        payDay: data.payDay,
+        payType: data.payType,
+        account: data.account,
+        memo: data.memo,
+      })
+      await refresh()
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "고정 비용 등록에 실패했습니다."
+      setSubmitError(message)
+      throw err
+    }
   }
 
   return (
@@ -251,7 +289,7 @@ export function FixedCostView() {
         <div className="flex flex-col gap-0.5">
           <h2 className="text-xl font-semibold tracking-tight text-foreground">고정 비용</h2>
           <p className="text-sm text-muted-foreground">
-            전체 {rows.length}건 · 현재 {filteredRows.length}건 표시
+            {loading ? "불러오는 중..." : `전체 ${rows.length}건 · 현재 ${filteredRows.length}건 표시`}
           </p>
         </div>
         <Button onClick={() => setOpen(true)} className="gap-1.5">
@@ -259,6 +297,13 @@ export function FixedCostView() {
           비용 등록
         </Button>
       </div>
+
+      {error ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">{error}</div>
+      ) : null}
+      {submitError ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">{submitError}</div>
+      ) : null}
 
       <Card className="overflow-hidden py-0 shadow-sm">
         <CardContent className="p-0">
@@ -313,9 +358,9 @@ export function FixedCostView() {
                     </td>
                   </tr>
                 ) : (
-                  filteredRows.map((row, idx) => (
+                  filteredRows.map((row) => (
                     <tr
-                      key={idx}
+                      key={row.id}
                       className="group border-b border-border/60 transition-colors last:border-0 hover:bg-accent/50"
                     >
                       {columns.map((col, colIdx) => (
@@ -333,12 +378,12 @@ export function FixedCostView() {
                             <Chip label={row.payType} styleMap={payTypeStyles} />
                           ) : col.key === "amount" ? (
                             <span className="font-medium tabular-nums">
-                              ₩{row.amount}
+                              ₩{Math.round(row.amount).toLocaleString("ko-KR")}
                             </span>
                           ) : col.key === "memo" ? (
                             <span className="text-muted-foreground">{row[col.key] || "-"}</span>
                           ) : (
-                            row[col.key] || "-"
+                            String(row[col.key] ?? "") || "-"
                           )}
                         </td>
                       ))}

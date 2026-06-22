@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -21,46 +21,41 @@ import {
   SelectTrigger,
 } from "@/components/ui/select"
 import { cn, toCommaNumber } from "@/lib/utils"
-
-// ── 타입 ─────────────────────────────────────────────────────────────────────
+import { ApiError, api } from "@/lib/api"
 
 type Telecom = {
-  owner: string        // 명의자
-  phone: string        // 연락처
-  carrier: string      // 통신사
-  cost: string         // 통신비용
-  paymentDay: string   // 납부일
-  bankName: string     // 은행명
-  accountNo: string    // 계좌번호
-  memo: string         // 비고
-  registeredAt: string // 등록일
+  id: number
+  corporationId: number | null
+  owner: string
+  phone: string
+  carrier: string
+  cost: number
+  paymentDay: string
+  bankName: string
+  accountNo: string
+  memo: string
+  registeredAt: string
 }
 
-// ── 상수 ─────────────────────────────────────────────────────────────────────
+type PageResponse<T> = {
+  content: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
 
 const CARRIER_OPTIONS = ["SKT", "KT", "LG U+", "알뜰폰(SKT)", "알뜰폰(KT)", "알뜰폰(LG)", "기타"]
 
 const carrierStyles: Record<string, string> = {
-  "SKT":         "bg-red-100 text-red-700",
-  "KT":          "bg-sky-100 text-sky-700",
-  "LG U+":       "bg-violet-100 text-violet-700",
+  "SKT": "bg-red-100 text-red-700",
+  "KT": "bg-sky-100 text-sky-700",
+  "LG U+": "bg-violet-100 text-violet-700",
   "알뜰폰(SKT)": "bg-rose-100 text-rose-600",
-  "알뜰폰(KT)":  "bg-cyan-100 text-cyan-700",
-  "알뜰폰(LG)":  "bg-purple-100 text-purple-600",
-  "기타":        "bg-slate-200 text-slate-600",
+  "알뜰폰(KT)": "bg-cyan-100 text-cyan-700",
+  "알뜰폰(LG)": "bg-purple-100 text-purple-600",
+  "기타": "bg-slate-200 text-slate-600",
 }
-
-// ── 샘플 데이터 ───────────────────────────────────────────────────────────────
-
-const initialRows: Telecom[] = [
-  { owner: "김대표", phone: "010-1234-5678", carrier: "SKT",         cost: "89,000", paymentDay: "5일",  bankName: "국민", accountNo: "123-456-789012",   memo: "법인폰",         registeredAt: "2024-01-05" },
-  { owner: "이이사", phone: "010-2345-6789", carrier: "KT",          cost: "75,000", paymentDay: "10일", bankName: "신한", accountNo: "110-234-567890",   memo: "",               registeredAt: "2024-01-05" },
-  { owner: "박팀장", phone: "010-3456-7890", carrier: "LG U+",       cost: "62,000", paymentDay: "15일", bankName: "우리", accountNo: "1002-345-678901",  memo: "개인 명의 사용", registeredAt: "2024-02-10" },
-  { owner: "최감사", phone: "010-4567-8901", carrier: "알뜰폰(SKT)", cost: "24,000", paymentDay: "20일", bankName: "하나", accountNo: "123-456789-01011", memo: "데이터 전용",    registeredAt: "2024-03-01" },
-  { owner: "정직원", phone: "010-5678-9012", carrier: "알뜰폰(KT)",  cost: "19,800", paymentDay: "25일", bankName: "기업", accountNo: "123-456-7890123",  memo: "",               registeredAt: "2024-03-15" },
-]
-
-// ── 컬럼 정의 ─────────────────────────────────────────────────────────────────
 
 type Column = {
   key: keyof Telecom
@@ -70,20 +65,18 @@ type Column = {
 }
 
 const columns: Column[] = [
-  { key: "owner",        label: "명의자",   minWidth: "110px" },
-  { key: "phone",        label: "연락처",   minWidth: "140px" },
-  { key: "carrier",      label: "통신사",   minWidth: "130px", filterOptions: CARRIER_OPTIONS },
-  { key: "cost",         label: "통신비용", minWidth: "120px" },
-  { key: "paymentDay",   label: "납부일",   minWidth: "100px" },
-  { key: "bankName",     label: "은행명",   minWidth: "100px" },
-  { key: "accountNo",    label: "계좌번호", minWidth: "170px" },
-  { key: "memo",         label: "비고",     minWidth: "160px" },
-  { key: "registeredAt", label: "등록일",   minWidth: "110px" },
+  { key: "owner", label: "명의자", minWidth: "110px" },
+  { key: "phone", label: "연락처", minWidth: "140px" },
+  { key: "carrier", label: "통신사", minWidth: "130px", filterOptions: CARRIER_OPTIONS },
+  { key: "cost", label: "통신비용", minWidth: "120px" },
+  { key: "paymentDay", label: "납부일", minWidth: "100px" },
+  { key: "bankName", label: "은행명", minWidth: "100px" },
+  { key: "accountNo", label: "계좌번호", minWidth: "170px" },
+  { key: "memo", label: "비고", minWidth: "160px" },
+  { key: "registeredAt", label: "등록일", minWidth: "110px" },
 ]
 
-const stickyOffsets = [0, 110, 250] // owner(110) + phone(140)
-
-// ── 배지 ─────────────────────────────────────────────────────────────────────
+const stickyOffsets = [0, 110, 250]
 
 function CarrierBadge({ carrier }: { carrier: string }) {
   return (
@@ -97,8 +90,6 @@ function CarrierBadge({ carrier }: { carrier: string }) {
     </span>
   )
 }
-
-// ── 폼 필드 헬퍼 ─────────────────────────────────────────────────────────────
 
 function Field({
   id, label, value, onChange, placeholder,
@@ -114,9 +105,16 @@ function Field({
   )
 }
 
-// ── 등록 다이얼로그 ───────────────────────────────────────────────────────────
-
-type FormData = Omit<Telecom, "registeredAt">
+type FormData = {
+  owner: string
+  phone: string
+  carrier: string
+  cost: string
+  paymentDay: string
+  bankName: string
+  accountNo: string
+  memo: string
+}
 
 const emptyForm: FormData = {
   owner: "", phone: "", carrier: "SKT", cost: "",
@@ -128,16 +126,24 @@ function TelecomDialog({
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
-  onSubmit: (data: FormData) => void
+  onSubmit: (data: FormData) => Promise<void> | void
 }) {
   const [form, setForm] = useState<FormData>(emptyForm)
+  const [submitting, setSubmitting] = useState(false)
   const set = (k: keyof FormData, v: string) => setForm((p) => ({ ...p, [k]: v }))
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    onSubmit(form)
-    setForm(emptyForm)
-    onOpenChange(false)
+    setSubmitting(true)
+    try {
+      await onSubmit(form)
+      setForm(emptyForm)
+      onOpenChange(false)
+    } catch {
+      // 부모에서 에러 노출
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -147,8 +153,6 @@ function TelecomDialog({
           <DialogTitle>통신비 등록</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 py-2">
-
-          {/* 명의자 / 연락처 */}
           <div className="grid grid-cols-2 gap-4">
             <Field id="tc-owner" label="명의자" value={form.owner}
               onChange={(v) => set("owner", v)} placeholder="예: 김대표" />
@@ -156,7 +160,6 @@ function TelecomDialog({
               onChange={(v) => set("phone", v)} placeholder="010-0000-0000" />
           </div>
 
-          {/* 통신사 */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="tc-carrier" className="text-xs text-muted-foreground">통신사</Label>
             <Select value={form.carrier} onValueChange={(v) => set("carrier", v)}>
@@ -171,7 +174,6 @@ function TelecomDialog({
             </Select>
           </div>
 
-          {/* 통신비용 / 납부일 */}
           <div className="grid grid-cols-2 gap-4">
             <Field id="tc-cost" label="통신비용 (원)" value={form.cost}
               onChange={(v) => set("cost", toCommaNumber(v))} placeholder="예: 89,000" />
@@ -179,7 +181,6 @@ function TelecomDialog({
               onChange={(v) => set("paymentDay", v)} placeholder="예: 매월 25일" />
           </div>
 
-          {/* 지급 계좌 */}
           <div className="flex flex-col gap-2">
             <p className="text-xs font-medium text-muted-foreground">지급 계좌</p>
             <div className="grid grid-cols-2 gap-4 rounded-lg border border-border p-3">
@@ -190,7 +191,6 @@ function TelecomDialog({
             </div>
           </div>
 
-          {/* 비고 */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="tc-memo" className="text-xs text-muted-foreground">비고</Label>
             <Textarea id="tc-memo" value={form.memo}
@@ -199,8 +199,8 @@ function TelecomDialog({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>취소</Button>
-            <Button type="submit">등록</Button>
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => onOpenChange(false)}>취소</Button>
+            <Button type="submit" disabled={submitting}>{submitting ? "등록 중..." : "등록"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -208,14 +208,32 @@ function TelecomDialog({
   )
 }
 
-// ── 메인 뷰 ──────────────────────────────────────────────────────────────────
-
 export function TelecomView() {
-  const [rows, setRows] = useState<Telecom[]>(initialRows)
+  const [rows, setRows] = useState<Telecom[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [filters, setFilters] = useState<Record<string, string>>({})
 
   const setFilter = (k: string, v: string) => setFilters((p) => ({ ...p, [k]: v }))
+
+  async function refresh() {
+    setLoading(true)
+    setError(null)
+    try {
+      const page = await api.get<PageResponse<Telecom>>("/api/telecoms?size=200")
+      setRows(page.content)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "통신비 목록을 불러오지 못했습니다.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void refresh()
+  }, [])
 
   const filteredRows = useMemo(() => {
     return rows.filter((row) =>
@@ -223,14 +241,31 @@ export function TelecomView() {
         const term = filters[col.key]?.trim()
         if (!term) return true
         if (col.filterOptions) return String(row[col.key]) === term
+        if (col.key === "cost") return String(row.cost).includes(term.replace(/,/g, ""))
         return String(row[col.key] ?? "").toLowerCase().includes(term.toLowerCase())
       }),
     )
   }, [rows, filters])
 
-  function handleSubmit(data: FormData) {
-    const registeredAt = new Date().toISOString().slice(0, 10)
-    setRows((prev) => [{ ...data, registeredAt }, ...prev])
+  async function handleSubmit(data: FormData) {
+    setSubmitError(null)
+    try {
+      await api.post<Telecom>("/api/telecoms", {
+        owner: data.owner,
+        phone: data.phone,
+        carrier: data.carrier,
+        cost: Number(data.cost.replace(/,/g, "")) || 0,
+        paymentDay: data.paymentDay,
+        bankName: data.bankName,
+        accountNo: data.accountNo,
+        memo: data.memo,
+      })
+      await refresh()
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "통신비 등록에 실패했습니다."
+      setSubmitError(message)
+      throw err
+    }
   }
 
   return (
@@ -239,7 +274,7 @@ export function TelecomView() {
         <div className="flex flex-col gap-0.5">
           <h2 className="text-xl font-semibold tracking-tight text-foreground">통신비</h2>
           <p className="text-sm text-muted-foreground">
-            전체 {rows.length}건 · 현재 {filteredRows.length}건 표시
+            {loading ? "불러오는 중..." : `전체 ${rows.length}건 · 현재 ${filteredRows.length}건 표시`}
           </p>
         </div>
         <Button onClick={() => setOpen(true)} className="gap-1.5">
@@ -247,6 +282,13 @@ export function TelecomView() {
           통신비 등록
         </Button>
       </div>
+
+      {error ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">{error}</div>
+      ) : null}
+      {submitError ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">{submitError}</div>
+      ) : null}
 
       <Card className="overflow-hidden py-0 shadow-sm">
         <CardContent className="p-0">
@@ -304,8 +346,8 @@ export function TelecomView() {
                     </td>
                   </tr>
                 ) : (
-                  filteredRows.map((row, idx) => (
-                    <tr key={idx} className="group border-b border-border/50 transition-colors last:border-0 hover:bg-accent/50">
+                  filteredRows.map((row) => (
+                    <tr key={row.id} className="group border-b border-border/50 transition-colors last:border-0 hover:bg-accent/50">
                       {columns.map((col, colIdx) => (
                         <td
                           key={col.key}
@@ -318,11 +360,11 @@ export function TelecomView() {
                           {col.key === "carrier" ? (
                             <CarrierBadge carrier={row.carrier} />
                           ) : col.key === "cost" ? (
-                            <span className="font-medium tabular-nums">₩{row.cost}</span>
+                            <span className="font-medium tabular-nums">₩{Math.round(row.cost).toLocaleString("ko-KR")}</span>
                           ) : col.key === "memo" ? (
                             <span className="text-muted-foreground">{row.memo || "-"}</span>
                           ) : (
-                            row[col.key] || "-"
+                            String(row[col.key] ?? "") || "-"
                           )}
                         </td>
                       ))}

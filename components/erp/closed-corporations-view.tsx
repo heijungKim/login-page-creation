@@ -67,11 +67,13 @@ const columns = [
 const stickyOffsets = [0, 130]
 
 export function ClosedCorporationsView() {
-  const { rows, setRows } = useCorporations()
+  const { rows, loading, error, changeStatus } = useCorporations()
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [detail, setDetail] = useState<Corporation | null>(null)
   const [restoreTarget, setRestoreTarget] = useState<Corporation | null>(null)
   const [restoreStatus, setRestoreStatus] = useState("활성")
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const closedRows = useMemo(() => rows.filter((r) => r.status === "폐업"), [rows])
 
@@ -89,13 +91,19 @@ export function ClosedCorporationsView() {
     setFilters((prev) => ({ ...prev, [key]: value }))
   }
 
-  function handleRestore() {
-    if (!restoreTarget) return
-    setRows((prev) =>
-      prev.map((r) => (r === restoreTarget ? { ...r, status: restoreStatus } : r))
-    )
-    setRestoreTarget(null)
-    setDetail(null)
+  async function handleRestore() {
+    if (!restoreTarget?.id) return
+    setSubmitError(null)
+    setSubmitting(true)
+    try {
+      await changeStatus(restoreTarget.id, restoreStatus)
+      setRestoreTarget(null)
+      setDetail(null)
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "복원에 실패했습니다.")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -103,9 +111,20 @@ export function ClosedCorporationsView() {
       <div className="flex flex-col gap-0.5">
         <h2 className="text-xl font-semibold tracking-tight text-foreground">폐업 법인</h2>
         <p className="text-sm text-muted-foreground">
-          전체 {closedRows.length}개 폐업 법인 · 현재 {filteredRows.length}개 표시
+          {loading ? "불러오는 중..." : `전체 ${closedRows.length}개 폐업 법인 · 현재 ${filteredRows.length}개 표시`}
         </p>
       </div>
+
+      {error ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          {error}
+        </div>
+      ) : null}
+      {submitError ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          {submitError}
+        </div>
+      ) : null}
 
       <Card className="overflow-hidden py-0 shadow-sm">
         <CardContent className="p-0">
@@ -143,9 +162,9 @@ export function ClosedCorporationsView() {
                     </td>
                   </tr>
                 ) : (
-                  filteredRows.map((row, idx) => (
+                  filteredRows.map((row) => (
                     <tr
-                      key={idx}
+                      key={row.id ?? row.corpNo}
                       className="group cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-accent/50"
                       onClick={() => setDetail(row)}
                     >
@@ -271,8 +290,8 @@ export function ClosedCorporationsView() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRestoreTarget(null)}>취소</Button>
-            <Button onClick={handleRestore}>복원</Button>
+            <Button variant="outline" disabled={submitting} onClick={() => setRestoreTarget(null)}>취소</Button>
+            <Button onClick={handleRestore} disabled={submitting}>{submitting ? "복원 중..." : "복원"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

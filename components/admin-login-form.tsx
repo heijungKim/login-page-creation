@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { ApiError, login } from "@/lib/api"
 
 export function AdminLoginForm({ onSuccess }: { onSuccess?: () => void }) {
   const [username, setUsername] = useState("")
@@ -22,16 +23,28 @@ export function AdminLoginForm({ onSuccess }: { onSuccess?: () => void }) {
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError("")
-    setIsLoading(true)
 
-    // 데모용: 아이디/비밀번호와 상관없이 항상 로그인 성공 처리합니다.
-    setTimeout(() => {
-      setIsLoading(false)
+    if (!username.trim() || !password) {
+      setError("아이디와 비밀번호를 모두 입력하세요.")
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      await login(username.trim(), password)
       onSuccess?.()
-    }, 500)
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message)
+      } else {
+        setError("서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.")
+      }
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (

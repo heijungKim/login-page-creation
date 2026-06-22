@@ -92,26 +92,42 @@ const columns: Column[] = [
 ]
 
 export function CorporationsView() {
-  const { rows, setRows } = useCorporations()
+  const { rows, loading, error, createCorporation, updateCorporation } = useCorporations()
   const [open, setOpen] = useState(false)
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [detail, setDetail] = useState<Corporation | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<Corporation | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   // 좌측 고정(sticky) 열(구분/상태/법인명)의 누적 left 위치
   const stickyOffsets = [0, 130, 240]
 
-  function handleSubmit(corp: Corporation) {
-    const registeredAt = new Date().toISOString().slice(0, 10)
-    setRows((prev) => [{ ...corp, registeredAt }, ...prev])
+  async function handleSubmit(corp: Corporation) {
+    setSubmitError(null)
+    try {
+      await createCorporation(corp)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "법인 등록에 실패했습니다."
+      setSubmitError(message)
+      throw err
+    }
   }
 
-  function handleSave() {
-    if (!editForm) return
-    setRows((prev) => prev.map((r) => (r === detail ? editForm : r)))
-    setDetail(editForm)
-    setIsEditing(false)
+  async function handleSave() {
+    if (!editForm?.id || !detail) return
+    setSubmitError(null)
+    setSubmitting(true)
+    try {
+      const updated = await updateCorporation(editForm.id, editForm)
+      setDetail(updated)
+      setIsEditing(false)
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "법인 수정에 실패했습니다.")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   function setEdit<K extends keyof Corporation>(key: K, value: Corporation[K]) {
@@ -156,14 +172,25 @@ export function CorporationsView() {
         <div className="flex flex-col gap-0.5">
           <h2 className="text-xl font-semibold tracking-tight text-foreground">법인 관리</h2>
           <p className="text-sm text-muted-foreground">
-            전체 {activeRows.length}개 법인 · 현재 {filteredRows.length}개 표시
+            {loading ? "불러오는 중..." : `전체 ${activeRows.length}개 법인 · 현재 ${filteredRows.length}개 표시`}
           </p>
         </div>
-        <Button onClick={() => setOpen(true)} className="gap-1.5">
+        <Button onClick={() => setOpen(true)} className="gap-1.5" disabled={submitting}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           법인 등록
         </Button>
       </div>
+
+      {error ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          {error}
+        </div>
+      ) : null}
+      {submitError ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          {submitError}
+        </div>
+      ) : null}
 
       <Card className="overflow-hidden py-0 shadow-sm">
         <CardContent className="p-0">
@@ -223,9 +250,9 @@ export function CorporationsView() {
                     </td>
                   </tr>
                 ) : (
-                  filteredRows.map((row, idx) => (
+                  filteredRows.map((row) => (
                     <tr
-                      key={idx}
+                      key={row.id ?? row.corpNo}
                       className="group cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-accent/50"
                       onClick={() => setDetail(row)}
                     >
@@ -280,8 +307,8 @@ export function CorporationsView() {
                       <div className="flex gap-2">
                         {isEditing && editForm ? (
                           <>
-                            <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => setIsEditing(false)}>취소</Button>
-                            <Button size="sm" className="h-8 px-3" onClick={handleSave}>저장</Button>
+                            <Button variant="outline" size="sm" className="h-8 px-3" disabled={submitting} onClick={() => setIsEditing(false)}>취소</Button>
+                            <Button size="sm" className="h-8 px-3" disabled={submitting} onClick={handleSave}>{submitting ? "저장 중..." : "저장"}</Button>
                           </>
                         ) : (
                           <Button variant="ghost" size="sm" className="h-8 px-3" onClick={() => { setEditForm({ ...detail }); setIsEditing(true) }}>수정</Button>
