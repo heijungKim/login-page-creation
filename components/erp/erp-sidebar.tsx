@@ -76,10 +76,10 @@ export function ErpSidebar({
       {/* 로고 */}
       <div className="flex h-16 items-center gap-3 px-5 border-b border-sidebar-border">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sidebar-primary shadow-md shadow-sidebar-primary/30">
-          <Building2 className="h-5 w-5 text-white" aria-hidden="true" />
+          <span className="text-white font-black text-lg leading-none select-none">F</span>
         </div>
         <div className="flex flex-col leading-tight">
-          <span className="text-sm font-bold text-sidebar-foreground">법인 세무 관리</span>
+          <span className="text-sm font-bold text-sidebar-foreground">Freed</span>
           <span className="text-[11px] text-sidebar-foreground/50 font-medium tracking-wide">ERP System</span>
         </div>
       </div>
@@ -123,7 +123,7 @@ export function ErpSidebar({
 
       {/* 하단 */}
       <div className="border-t border-sidebar-border px-4 py-3">
-        <p className="text-[11px] text-sidebar-foreground/35">© 2026 법인 세무 관리</p>
+        <p className="text-[11px] text-sidebar-foreground/35">© 2026 Freed</p>
       </div>
     </aside>
   )
