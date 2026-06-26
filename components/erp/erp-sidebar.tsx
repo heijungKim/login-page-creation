@@ -13,6 +13,7 @@ import {
   ReceiptText,
   PiggyBank,
   CalendarCheck,
+  Users,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -58,6 +59,12 @@ const menuGroups: MenuGroup[] = [
     items: [
       { id: "business-income", label: "사업소득", icon: TrendingUp },
       { id: "tax-progress", label: "월 세무 진행현황", icon: CalendarCheck },
+    ],
+  },
+  {
+    label: "시스템",
+    items: [
+      { id: "user-management", label: "사용자 관리", icon: Users },
     ],
   },
 ]

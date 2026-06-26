@@ -15,6 +15,7 @@ import { AuditRegionView } from "@/components/erp/audit-region-view"
 import { LeaseView } from "@/components/erp/lease-view"
 import { CorporationsProvider } from "@/components/erp/corporations-context"
 import { ClosedCorporationsView } from "@/components/erp/closed-corporations-view"
+import { UserManagementView } from "@/components/erp/user-management-view"
 
 const validIds = new Set(menuItems.map((m) => m.id))
 
@@ -68,6 +69,8 @@ export function ErpLayout({ onLogout }: { onLogout: () => void }) {
             <LeaseView />
           ) : active === "closed" ? (
             <ClosedCorporationsView />
+          ) : active === "user-management" ? (
+            <UserManagementView />
           ) : (
             <MenuView menuId={active} />
           )}
