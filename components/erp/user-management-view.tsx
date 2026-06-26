@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { Plus, Pencil, Trash2, ShieldCheck, ShieldOff, Eye, EyeOff } from "lucide-react"
+import { Plus, Pencil, Trash2, ShieldCheck, ShieldOff, Eye, EyeOff, KeyRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -29,7 +29,7 @@ function getCurrentAdminId(): number | null {
   }
 }
 
-const emptyForm = { username: "", displayName: "", password: "" }
+const emptyForm = { username: "", displayName: "", password: "", passwordConfirm: "" }
 
 export function UserManagementView() {
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -41,6 +41,14 @@ export function UserManagementView() {
   const [addError, setAddError] = useState("")
   const [addLoading, setAddLoading] = useState(false)
   const [showAddPw, setShowAddPw] = useState(false)
+  const [showAddPwConfirm, setShowAddPwConfirm] = useState(false)
+
+  const [resetTarget, setResetTarget] = useState<AdminUser | null>(null)
+  const [resetForm, setResetForm] = useState({ password: "", passwordConfirm: "" })
+  const [resetError, setResetError] = useState("")
+  const [resetLoading, setResetLoading] = useState(false)
+  const [showResetPw, setShowResetPw] = useState(false)
+  const [showResetPwConfirm, setShowResetPwConfirm] = useState(false)
 
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null)
   const [editForm, setEditForm] = useState({ displayName: "", password: "" })
@@ -71,6 +79,10 @@ export function UserManagementView() {
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
     setAddError("")
+    if (addForm.password !== addForm.passwordConfirm) {
+      setAddError("비밀번호가 일치하지 않습니다.")
+      return
+    }
     setAddLoading(true)
     try {
       const created = await api.post<AdminUser>("/api/admins", {
@@ -85,6 +97,28 @@ export function UserManagementView() {
       setAddError(e instanceof ApiError ? e.message : "등록 실패")
     } finally {
       setAddLoading(false)
+    }
+  }
+
+  async function handleReset(e: React.FormEvent) {
+    e.preventDefault()
+    if (!resetTarget) return
+    setResetError("")
+    if (resetForm.password !== resetForm.passwordConfirm) {
+      setResetError("비밀번호가 일치하지 않습니다.")
+      return
+    }
+    setResetLoading(true)
+    try {
+      await api.put(`/api/admins/${resetTarget.id}`, {
+        displayName: resetTarget.displayName,
+        password: resetForm.password,
+      })
+      setResetTarget(null)
+    } catch (e) {
+      setResetError(e instanceof ApiError ? e.message : "초기화 실패")
+    } finally {
+      setResetLoading(false)
     }
   }
 
@@ -212,6 +246,15 @@ export function UserManagementView() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
+                          title="비밀번호 초기화"
+                          onClick={() => { setResetTarget(user); setResetForm({ password: "", passwordConfirm: "" }); setResetError(""); setShowResetPw(false); setShowResetPwConfirm(false) }}
+                        >
+                          <KeyRound className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
                           title="수정"
                           onClick={() => openEdit(user)}
                         >
@@ -283,6 +326,26 @@ export function UserManagementView() {
                 </button>
               </div>
             </div>
+            <div className="space-y-1.5">
+              <Label>비밀번호 확인</Label>
+              <div className="relative">
+                <Input
+                  type={showAddPwConfirm ? "text" : "password"}
+                  value={addForm.passwordConfirm}
+                  onChange={(e) => setAddForm((f) => ({ ...f, passwordConfirm: e.target.value }))}
+                  placeholder="비밀번호 재입력"
+                  className="pr-10"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAddPwConfirm((v) => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showAddPwConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
             {addError && <p className="text-sm text-destructive">{addError}</p>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowAdd(false)}>취소</Button>
@@ -331,6 +394,62 @@ export function UserManagementView() {
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditTarget(null)}>취소</Button>
               <Button type="submit" disabled={editLoading}>{editLoading ? "저장 중..." : "저장"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* 비밀번호 초기화 다이얼로그 */}
+      <Dialog open={!!resetTarget} onOpenChange={(o) => { if (!o) setResetTarget(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>비밀번호 초기화 — {resetTarget?.username}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleReset} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label>새 비밀번호</Label>
+              <div className="relative">
+                <Input
+                  type={showResetPw ? "text" : "password"}
+                  value={resetForm.password}
+                  onChange={(e) => setResetForm((f) => ({ ...f, password: e.target.value }))}
+                  placeholder="4자 이상"
+                  className="pr-10"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowResetPw((v) => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showResetPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>새 비밀번호 확인</Label>
+              <div className="relative">
+                <Input
+                  type={showResetPwConfirm ? "text" : "password"}
+                  value={resetForm.passwordConfirm}
+                  onChange={(e) => setResetForm((f) => ({ ...f, passwordConfirm: e.target.value }))}
+                  placeholder="비밀번호 재입력"
+                  className="pr-10"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowResetPwConfirm((v) => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showResetPwConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            {resetError && <p className="text-sm text-destructive">{resetError}</p>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setResetTarget(null)}>취소</Button>
+              <Button type="submit" disabled={resetLoading}>{resetLoading ? "초기화 중..." : "초기화"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
