@@ -1,40 +1,42 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react"
-import { type Corporation } from "@/components/erp/corporation-form-dialog"
+import { type Corporation, type Shareholder } from "@/components/erp/corporation-form-dialog"
 import { ApiError, api } from "@/lib/api"
 
-type CorporationResponse = Required<Pick<Corporation,
-  | "id"
-  | "category"
-  | "status"
-  | "name"
-  | "region"
-  | "bizNo"
-  | "corpNo"
-  | "ceo"
-  | "auditorDirector"
-  | "shareholder"
-  | "phone"
-  | "phonePlan"
-  | "bizAddress"
-  | "bizEmail"
-  | "account"
-  | "certCorp"
-  | "certPersonal"
-  | "iros"
-  | "irosPw"
-  | "irosUserNo"
-  | "hometaxId"
-  | "hometaxPw"
-  | "note"
-  | "registeredAt"
-  | "createdAt"
-  | "updatedAt"
->> & {
+// 백엔드 API 응답 형태 (shareholder: JSON 문자열, birthDate: 주민번호)
+type CorporationResponse = {
+  id: number
+  category: string
+  status: string
+  name: string
+  region: string
   openDate: string | null
+  bizNo: string
+  corpNo: string
+  ceo: string
+  auditorDirector: string
+  shareholder: string
   birthDate: string | null
+  phone: string
+  phonePlan: string
+  bizAddress: string
+  bizEmail: string
+  account: string
+  certCorp: string
+  certPersonal: string
   certExpiry: string | null
+  iros: string
+  irosPw: string
+  irosUserNo: string
+  hometaxId: string
+  hometaxPw: string
+  closeDate: string | null
+  progressMemo: string
+  note: string
+  registeredAt: string
+  createdAt: string
+  updatedAt: string
 }
 
 type PageResponse<T> = {
@@ -45,12 +47,78 @@ type PageResponse<T> = {
   totalPages: number
 }
 
+function parseAccount(raw: string) {
+  const empty = {
+    corpBankName: "", corpAccountNo: "", corpAccountPw: "",
+    personalBankName: "", personalAccountNo: "", personalAccountPw: "",
+  }
+  try {
+    const parsed = JSON.parse(raw || "{}")
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return empty
+    if (parsed.corp || parsed.personal) {
+      return {
+        corpBankName: String(parsed.corp?.bank || ""),
+        corpAccountNo: String(parsed.corp?.no || ""),
+        corpAccountPw: String(parsed.corp?.pw || ""),
+        personalBankName: String(parsed.personal?.bank || ""),
+        personalAccountNo: String(parsed.personal?.no || ""),
+        personalAccountPw: String(parsed.personal?.pw || ""),
+      }
+    }
+    return {
+      ...empty,
+      corpBankName: String(parsed.bank || ""),
+      corpAccountNo: String(parsed.no || ""),
+      corpAccountPw: String(parsed.pw || ""),
+    }
+  } catch {
+    return empty
+  }
+}
+
+function parseShareholders(raw: string): Shareholder[] {
+  try {
+    const parsed = JSON.parse(raw || "[]")
+    if (Array.isArray(parsed)) return parsed as Shareholder[]
+  } catch {
+    // 구버전 단순 문자열 → 단일 주주로 처리
+  }
+  return raw ? [{ name: raw, equity: "" }] : []
+}
+
 function fromResponse(r: CorporationResponse): Corporation {
   return {
-    ...r,
+    id: r.id,
+    category: r.category,
+    status: r.status,
+    name: r.name,
+    region: r.region,
     openDate: r.openDate ?? "",
-    birthDate: r.birthDate ?? "",
+    bizNo: r.bizNo,
+    corpNo: r.corpNo,
+    ceo: r.ceo,
+    auditorDirector: r.auditorDirector,
+    shareholders: parseShareholders(r.shareholder),
+    residentNo: r.birthDate ?? "",
+    phone: r.phone,
+    phonePlan: r.phonePlan,
+    bizAddress: r.bizAddress,
+    bizEmail: r.bizEmail,
+    ...parseAccount(r.account),
+    certCorp: r.certCorp,
+    certPersonal: r.certPersonal,
     certExpiry: r.certExpiry ?? "",
+    iros: r.iros,
+    irosPw: r.irosPw,
+    irosUserNo: r.irosUserNo,
+    hometaxId: r.hometaxId,
+    hometaxPw: r.hometaxPw,
+    closeDate: r.closeDate ?? "",
+    progressMemo: r.progressMemo ?? "",
+    note: r.note,
+    registeredAt: r.registeredAt,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
   }
 }
 
@@ -65,13 +133,16 @@ function toRequest(c: Corporation) {
     corpNo: c.corpNo,
     ceo: c.ceo,
     auditorDirector: c.auditorDirector,
-    shareholder: c.shareholder,
-    birthDate: c.birthDate || null,
+    shareholder: JSON.stringify(c.shareholders || []),
+    birthDate: c.residentNo || "",
     phone: c.phone,
     phonePlan: c.phonePlan,
     bizAddress: c.bizAddress,
     bizEmail: c.bizEmail,
-    account: c.account,
+    account: JSON.stringify({
+      corp: { bank: c.corpBankName, no: c.corpAccountNo, pw: c.corpAccountPw },
+      personal: { bank: c.personalBankName, no: c.personalAccountNo, pw: c.personalAccountPw },
+    }),
     certCorp: c.certCorp,
     certPersonal: c.certPersonal,
     certExpiry: c.certExpiry || null,
@@ -80,6 +151,8 @@ function toRequest(c: Corporation) {
     irosUserNo: c.irosUserNo,
     hometaxId: c.hometaxId,
     hometaxPw: c.hometaxPw,
+    closeDate: c.closeDate || null,
+    progressMemo: c.progressMemo,
     note: c.note,
     registeredAt: c.registeredAt || null,
   }
@@ -107,9 +180,7 @@ export function CorporationsProvider({ children }: { children: React.ReactNode }
     setLoading(true)
     setError(null)
     try {
-      const page = await api.get<PageResponse<CorporationResponse>>(
-        "/api/corporations?size=200",
-      )
+      const page = await api.get<PageResponse<CorporationResponse>>("/api/corporations?size=200")
       setRows(page.content.map(fromResponse))
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "법인 목록을 불러오지 못했습니다."
@@ -119,35 +190,24 @@ export function CorporationsProvider({ children }: { children: React.ReactNode }
     }
   }, [])
 
-  useEffect(() => {
-    void refresh()
-  }, [refresh])
+  useEffect(() => { void refresh() }, [refresh])
 
   const createCorporation = useCallback(async (corp: Corporation) => {
-    const created = await api.post<CorporationResponse>(
-      "/api/corporations",
-      toRequest(corp),
-    )
+    const created = await api.post<CorporationResponse>("/api/corporations", toRequest(corp))
     const mapped = fromResponse(created)
     setRows((prev) => [mapped, ...prev])
     return mapped
   }, [])
 
   const updateCorporation = useCallback(async (id: number, corp: Corporation) => {
-    const updated = await api.put<CorporationResponse>(
-      `/api/corporations/${id}`,
-      toRequest(corp),
-    )
+    const updated = await api.put<CorporationResponse>(`/api/corporations/${id}`, toRequest(corp))
     const mapped = fromResponse(updated)
     setRows((prev) => prev.map((r) => (r.id === id ? mapped : r)))
     return mapped
   }, [])
 
   const changeStatus = useCallback(async (id: number, status: string) => {
-    const updated = await api.patch<CorporationResponse>(
-      `/api/corporations/${id}/status`,
-      { status },
-    )
+    const updated = await api.patch<CorporationResponse>(`/api/corporations/${id}/status`, { status })
     const mapped = fromResponse(updated)
     setRows((prev) => prev.map((r) => (r.id === id ? mapped : r)))
     return mapped

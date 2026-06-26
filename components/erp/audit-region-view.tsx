@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Plus } from "lucide-react"
+import { Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -24,7 +24,10 @@ type AuditEntry = {
   bizRegion: string
   bizCity: string
   bizRegDate: string | null
+  bizInfos: string
 }
+
+type BizInfo = { region: string; city: string; regDate: string }
 
 type PageResponse<T> = {
   content: T[]
@@ -67,13 +70,52 @@ const stickyOffsets = [0, 110]
 type FormData = {
   name: string; regNo: string; contact: string; email: string
   address: string; account: string; note: string; status: string
-  bizRegion: string; bizCity: string; bizRegDate: string
+  bizInfos: BizInfo[]
 }
 
-const emptyForm: FormData = {
+const emptyBizInfo = (): BizInfo => ({ region: "서울", city: "", regDate: "" })
+
+const emptyForm = (): FormData => ({
   name: "", regNo: "", contact: "", email: "",
   address: "", account: "", note: "", status: "활성",
-  bizRegion: "서울", bizCity: "", bizRegDate: "",
+  bizInfos: [emptyBizInfo()],
+})
+
+function parseBizInfos(raw: string, fallback: { bizRegion: string; bizCity: string; bizRegDate: string | null }): BizInfo[] {
+  try {
+    const parsed = JSON.parse(raw || "[]")
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed as BizInfo[]
+  } catch { /* ignore */ }
+  if (fallback.bizRegion || fallback.bizCity || fallback.bizRegDate) {
+    return [{ region: fallback.bizRegion || "서울", city: fallback.bizCity || "", regDate: fallback.bizRegDate || "" }]
+  }
+  return [emptyBizInfo()]
+}
+
+function toRequest(form: FormData) {
+  const first = form.bizInfos[0] ?? emptyBizInfo()
+  return {
+    name: form.name.trim(),
+    regNo: form.regNo,
+    contact: form.contact,
+    email: form.email,
+    address: form.address,
+    account: form.account,
+    note: form.note,
+    status: form.status,
+    bizRegion: first.region || "서울",
+    bizCity: first.city,
+    bizRegDate: first.regDate || null,
+    bizInfos: JSON.stringify(form.bizInfos),
+  }
+}
+
+function toFormData(row: AuditEntry): FormData {
+  return {
+    name: row.name, regNo: row.regNo, contact: row.contact, email: row.email,
+    address: row.address, account: row.account, note: row.note, status: row.status,
+    bizInfos: parseBizInfos(row.bizInfos, { bizRegion: row.bizRegion, bizCity: row.bizCity, bizRegDate: row.bizRegDate }),
+  }
 }
 
 function Field({ id, label, value, onChange, placeholder, type = "text" }: {
@@ -88,9 +130,9 @@ function Field({ id, label, value, onChange, placeholder, type = "text" }: {
   )
 }
 
-function SelectField({ id, label, value, onChange, options, placeholder }: {
+function SelectField({ id, label, value, onChange, options }: {
   id: string; label: string; value: string
-  onChange: (v: string) => void; options: string[]; placeholder?: string
+  onChange: (v: string) => void; options: string[]
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -101,35 +143,73 @@ function SelectField({ id, label, value, onChange, options, placeholder }: {
         onChange={(e) => onChange(e.target.value)}
         className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
       >
-        {placeholder && <option value="">{placeholder}</option>}
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
     </div>
   )
 }
 
-function toRequest(form: FormData) {
-  return {
-    name: form.name.trim(),
-    regNo: form.regNo,
-    contact: form.contact,
-    email: form.email,
-    address: form.address,
-    account: form.account,
-    note: form.note,
-    status: form.status,
-    bizRegion: form.bizRegion || "서울",
-    bizCity: form.bizCity,
-    bizRegDate: form.bizRegDate || null,
+function BizInfosEditor({ bizInfos, onChange }: { bizInfos: BizInfo[]; onChange: (infos: BizInfo[]) => void }) {
+  function add() { onChange([...bizInfos, emptyBizInfo()]) }
+  function remove(i: number) { onChange(bizInfos.filter((_, idx) => idx !== i)) }
+  function update(i: number, field: keyof BizInfo, value: string) {
+    onChange(bizInfos.map((b, idx) => idx === i ? { ...b, [field]: value } : b))
   }
-}
 
-function toFormData(row: AuditEntry): FormData {
-  return {
-    name: row.name, regNo: row.regNo, contact: row.contact, email: row.email,
-    address: row.address, account: row.account, note: row.note, status: row.status,
-    bizRegion: row.bizRegion, bizCity: row.bizCity, bizRegDate: row.bizRegDate ?? "",
-  }
+  return (
+    <div className="flex flex-col gap-3">
+      {bizInfos.map((biz, i) => (
+        <div key={i} className="relative rounded-md border border-border bg-background p-3">
+          {bizInfos.length > 1 && (
+            <button
+              type="button"
+              onClick={() => remove(i)}
+              className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-destructive"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {bizInfos.length > 1 && (
+            <p className="mb-2 text-xs font-medium text-muted-foreground">사업자 {i + 1}</p>
+          )}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-muted-foreground">지역</Label>
+              <select
+                value={biz.region}
+                onChange={(e) => update(i, "region", e.target.value)}
+                className="h-9 rounded-md border border-input bg-background px-2.5 text-sm text-foreground"
+              >
+                {REGION_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-muted-foreground">시 / 구</Label>
+              <Input
+                value={biz.city}
+                onChange={(e) => update(i, "city", e.target.value)}
+                placeholder="예: 수원시, 강남구"
+                className="h-9"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-muted-foreground">사업자 등록일</Label>
+              <Input
+                type="date"
+                value={biz.regDate}
+                onChange={(e) => update(i, "regDate", e.target.value)}
+                className="h-9"
+              />
+            </div>
+          </div>
+        </div>
+      ))}
+      <Button type="button" variant="outline" size="sm" className="w-fit gap-1.5 text-xs" onClick={add}>
+        <Plus className="h-3.5 w-3.5" />
+        사업자 추가
+      </Button>
+    </div>
+  )
 }
 
 export function AuditRegionView() {
@@ -139,40 +219,38 @@ export function AuditRegionView() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [detail, setDetail] = useState<AuditEntry | null>(null)
-  const [form, setForm] = useState<FormData>(emptyForm)
-  const [detailForm, setDetailForm] = useState<FormData>(emptyForm)
+  const [form, setForm] = useState<FormData>(emptyForm())
+  const [detailForm, setDetailForm] = useState<FormData>(emptyForm())
   const [editMode, setEditMode] = useState(false)
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
 
-  const set = (k: keyof FormData, v: string) => setForm((f) => ({ ...f, [k]: v }))
-  const setDetailField = (k: keyof FormData, v: string) => setDetailForm((f) => ({ ...f, [k]: v }))
+  function setField<K extends keyof FormData>(k: K, v: FormData[K]) {
+    setForm((f) => ({ ...f, [k]: v }))
+  }
+  function setDetailField<K extends keyof FormData>(k: K, v: FormData[K]) {
+    setDetailForm((f) => ({ ...f, [k]: v }))
+  }
   const setFilter = (k: string, v: string) => setFilters((f) => ({ ...f, [k]: v }))
 
   async function refresh() {
-    setLoading(true)
-    setError(null)
+    setLoading(true); setError(null)
     try {
       const page = await api.get<PageResponse<AuditEntry>>("/api/audit-regions?size=200")
       setRows(page.content)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "감사 지역 목록을 불러오지 못했습니다.")
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
-  useEffect(() => {
-    void refresh()
-  }, [])
+  useEffect(() => { void refresh() }, [])
 
   const filteredRows = useMemo(() =>
     rows.filter((row) =>
       columns.every((col) => {
         const term = filters[col.key]?.trim().toLowerCase()
         if (!term) return true
-        const value = row[col.key as keyof AuditEntry]
-        return String(value ?? "").toLowerCase().includes(term)
+        return String(row[col.key as keyof AuditEntry] ?? "").toLowerCase().includes(term)
       })
     ), [rows, filters])
 
@@ -183,42 +261,27 @@ export function AuditRegionView() {
     setSubmitting(true)
     try {
       await api.post<AuditEntry>("/api/audit-regions", toRequest(form))
-      setForm(emptyForm)
-      setOpen(false)
+      setForm(emptyForm()); setOpen(false)
       await refresh()
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : "등록에 실패했습니다.")
-    } finally {
-      setSubmitting(false)
-    }
+    } finally { setSubmitting(false) }
   }
 
   function openDetail(row: AuditEntry) {
-    setDetail(row)
-    setDetailForm(toFormData(row))
-    setEditMode(false)
-    setSubmitError(null)
+    setDetail(row); setDetailForm(toFormData(row)); setEditMode(false); setSubmitError(null)
   }
 
   async function handleSaveDetail() {
     if (!detail) return
-    setSubmitError(null)
-    setSubmitting(true)
+    setSubmitError(null); setSubmitting(true)
     try {
       const updated = await api.put<AuditEntry>(`/api/audit-regions/${detail.id}`, toRequest(detailForm))
       setRows((prev) => prev.map((r) => (r.id === detail.id ? updated : r)))
-      setDetail(updated)
-      setEditMode(false)
+      setDetail(updated); setEditMode(false)
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : "수정에 실패했습니다.")
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  function resetDetail(row: AuditEntry) {
-    setDetailForm(toFormData(row))
-    setEditMode(false)
+    } finally { setSubmitting(false) }
   }
 
   return (
@@ -230,15 +293,12 @@ export function AuditRegionView() {
             {loading ? "불러오는 중..." : `전체 ${rows.length}건 · 현재 ${filteredRows.length}건 표시`}
           </p>
         </div>
-        <Button onClick={() => { setSubmitError(null); setOpen(true) }} className="gap-1.5">
-          <Plus className="h-4 w-4" />
-          등록
+        <Button onClick={() => { setSubmitError(null); setForm(emptyForm()); setOpen(true) }} className="gap-1.5">
+          <Plus className="h-4 w-4" />등록
         </Button>
       </div>
 
-      {error ? (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">{error}</div>
-      ) : null}
+      {error && <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">{error}</div>}
 
       <Card className="overflow-hidden py-0 shadow-sm">
         <CardContent className="p-0">
@@ -265,31 +325,20 @@ export function AuditRegionView() {
                         style={{ minWidth: col.minWidth, left: colIdx < 2 ? stickyOffsets[colIdx] : undefined }}
                       >
                         {col.key === "status" ? (
-                          <select
-                            value={filters["status"] ?? ""}
-                            onChange={(e) => setFilter("status", e.target.value)}
-                            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs font-normal text-foreground"
-                          >
+                          <select value={filters["status"] ?? ""} onChange={(e) => setFilter("status", e.target.value)}
+                            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs font-normal text-foreground">
                             <option value="">상태</option>
                             {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                           </select>
                         ) : col.key === "bizRegion" ? (
-                          <select
-                            value={filters["bizRegion"] ?? ""}
-                            onChange={(e) => setFilter("bizRegion", e.target.value)}
-                            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs font-normal text-foreground"
-                          >
+                          <select value={filters["bizRegion"] ?? ""} onChange={(e) => setFilter("bizRegion", e.target.value)}
+                            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs font-normal text-foreground">
                             <option value="">지역</option>
                             {REGION_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
                           </select>
                         ) : (
-                          <Input
-                            value={filters[col.key] ?? ""}
-                            onChange={(e) => setFilter(col.key, e.target.value)}
-                            placeholder={col.label}
-                            className="h-8 bg-background text-xs font-normal"
-                            aria-label={`${col.label} 필터`}
-                          />
+                          <Input value={filters[col.key] ?? ""} onChange={(e) => setFilter(col.key, e.target.value)}
+                            placeholder={col.label} className="h-8 bg-background text-xs font-normal" />
                         )}
                       </th>
                     )
@@ -298,45 +347,48 @@ export function AuditRegionView() {
               </thead>
               <tbody>
                 {filteredRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={columns.length} className="h-64 px-4 py-10 text-center text-muted-foreground">
-                      조건에 맞는 데이터가 없습니다.
-                    </td>
-                  </tr>
+                  <tr><td colSpan={columns.length} className="h-64 px-4 py-10 text-center text-muted-foreground">조건에 맞는 데이터가 없습니다.</td></tr>
                 ) : (
-                  filteredRows.map((row) => (
-                    <tr
-                      key={row.id}
-                      className="group cursor-pointer border-b border-border/50 transition-colors last:border-0 hover:bg-accent/50"
-                      onClick={() => openDetail(row)}
-                    >
-                      {columns.map((col, colIdx) => {
-                        const isBiz = colIdx >= 8 && colIdx <= 10
-                        const value = row[col.key as keyof AuditEntry]
-                        return (
-                          <td
-                            key={col.key}
-                            className={cn(
-                              "whitespace-nowrap px-3 py-2.5 text-foreground",
-                              colIdx < 2 && "sticky z-10 bg-card group-hover:bg-accent",
-                              isBiz && "bg-indigo-50/30 group-hover:bg-indigo-50/60 dark:bg-indigo-950/10",
-                              isBiz && colIdx === 8 && "border-l-2 border-l-indigo-200",
-                            )}
-                            style={{ left: colIdx < 2 ? stickyOffsets[colIdx] : undefined }}
-                          >
-                            {col.key === "name" && <span className="font-medium">{row.name}</span>}
-                            {col.key === "status" && (
-                              <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", statusStyles[row.status] ?? "bg-muted text-muted-foreground")}>
-                                {row.status}
-                              </span>
-                            )}
-                            {col.key === "note" && <span className="text-muted-foreground">{row.note || "-"}</span>}
-                            {col.key !== "name" && col.key !== "status" && col.key !== "note" && (String(value ?? "") || "-")}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  ))
+                  filteredRows.map((row) => {
+                    const infos = parseBizInfos(row.bizInfos, { bizRegion: row.bizRegion, bizCity: row.bizCity, bizRegDate: row.bizRegDate })
+                    const first = infos[0]
+                    const extra = infos.length - 1
+                    return (
+                      <tr key={row.id} className="group cursor-pointer border-b border-border/50 transition-colors last:border-0 hover:bg-accent/50" onClick={() => openDetail(row)}>
+                        {columns.map((col, colIdx) => {
+                          const isBiz = colIdx >= 8 && colIdx <= 10
+                          const raw = row[col.key as keyof AuditEntry]
+                          return (
+                            <td
+                              key={col.key}
+                              className={cn(
+                                "whitespace-nowrap px-3 py-2.5 text-foreground",
+                                colIdx < 2 && "sticky z-10 bg-card group-hover:bg-accent",
+                                isBiz && "bg-indigo-50/30 group-hover:bg-indigo-50/60 dark:bg-indigo-950/10",
+                                isBiz && colIdx === 8 && "border-l-2 border-l-indigo-200",
+                              )}
+                              style={{ left: colIdx < 2 ? stickyOffsets[colIdx] : undefined }}
+                            >
+                              {col.key === "name" && <span className="font-medium">{row.name}</span>}
+                              {col.key === "status" && (
+                                <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", statusStyles[row.status] ?? "bg-muted text-muted-foreground")}>{row.status}</span>
+                              )}
+                              {col.key === "note" && <span className="text-muted-foreground">{row.note || "-"}</span>}
+                              {col.key === "bizRegion" && (
+                                <span className="flex items-center gap-1.5">
+                                  {first?.region || "-"}
+                                  {extra > 0 && <span className="inline-flex rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600">+{extra}</span>}
+                                </span>
+                              )}
+                              {col.key === "bizCity" && (first?.city || "-")}
+                              {col.key === "bizRegDate" && (first?.regDate || "-")}
+                              {!["name","status","note","bizRegion","bizCity","bizRegDate"].includes(col.key) && (String(raw ?? "") || "-")}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
             </table>
@@ -344,33 +396,32 @@ export function AuditRegionView() {
         </CardContent>
       </Card>
 
+      {/* 상세/수정 다이얼로그 */}
       <Dialog open={!!detail} onOpenChange={(o) => { if (!o) { setDetail(null); setEditMode(false); setSubmitError(null) } }}>
-        <DialogContent className="!w-[50vw] !max-w-[50vw] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>상세 정보</DialogTitle>
-          </DialogHeader>
-          {detail && (
-            <div className="flex flex-col gap-4 py-2">
-              {submitError ? (
-                <p className="text-xs text-destructive">{submitError}</p>
-              ) : null}
-              <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">기본 정보</p>
-                  <div className="flex gap-2">
-                    {editMode ? (
-                      <>
-                        <Button variant="outline" size="sm" className="h-8 px-3" disabled={submitting} onClick={() => resetDetail(detail)}>취소</Button>
-                        <Button size="sm" className="h-8 px-3" disabled={submitting} onClick={handleSaveDetail}>{submitting ? "저장 중..." : "저장"}</Button>
-                      </>
-                    ) : (
-                      <Button variant="ghost" size="sm" className="h-8 px-3" onClick={() => setEditMode(true)}>수정</Button>
-                    )}
+        <DialogContent className="!w-[60vw] !max-w-[60vw] max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>상세 정보</DialogTitle></DialogHeader>
+          {detail && (() => {
+            const detailBizInfos = parseBizInfos(detail.bizInfos, { bizRegion: detail.bizRegion, bizCity: detail.bizCity, bizRegDate: detail.bizRegDate })
+            return (
+              <div className="flex flex-col gap-4 py-2">
+                {submitError && <p className="text-xs text-destructive">{submitError}</p>}
+
+                <div className="rounded-lg border border-border bg-muted/30 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">기본 정보</p>
+                    <div className="flex gap-2">
+                      {editMode ? (
+                        <>
+                          <Button variant="outline" size="sm" className="h-8 px-3" disabled={submitting} onClick={() => { setDetailForm(toFormData(detail)); setEditMode(false) }}>취소</Button>
+                          <Button size="sm" className="h-8 px-3" disabled={submitting} onClick={handleSaveDetail}>{submitting ? "저장 중..." : "저장"}</Button>
+                        </>
+                      ) : (
+                        <Button variant="ghost" size="sm" className="h-8 px-3" onClick={() => setEditMode(true)}>수정</Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
                   {editMode ? (
-                    <>
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
                       <Field id="d-name" label="이름" value={detailForm.name} onChange={(v) => setDetailField("name", v)} />
                       <Field id="d-regNo" label="주민번호" value={detailForm.regNo} onChange={(v) => setDetailField("regNo", v)} />
                       <Field id="d-contact" label="연락처" value={detailForm.contact} onChange={(v) => setDetailField("contact", v)} />
@@ -379,91 +430,90 @@ export function AuditRegionView() {
                       <Field id="d-account" label="계좌정보" value={detailForm.account} onChange={(v) => setDetailField("account", v)} />
                       <Field id="d-note" label="비고" value={detailForm.note} onChange={(v) => setDetailField("note", v)} />
                       <SelectField id="d-status" label="상태" value={detailForm.status} onChange={(v) => setDetailField("status", v)} options={STATUS_OPTIONS} />
-                    </>
+                    </div>
                   ) : (
-                    [
-                      { label: "이름", value: detail.name },
-                      { label: "주민번호", value: detail.regNo },
-                      { label: "연락처", value: detail.contact },
-                      { label: "이메일", value: detail.email },
-                      { label: "주소", value: detail.address },
-                      { label: "계좌정보", value: detail.account },
-                      { label: "비고", value: detail.note || "-" },
-                      { label: "상태", value: detail.status, isStatus: true },
-                      { label: "등록일", value: detail.registeredAt },
-                    ].map(({ label, value, isStatus }) => (
-                      <div key={label} className="flex gap-2">
-                        <span className="w-20 shrink-0 text-muted-foreground">{label}</span>
-                        {isStatus ? (
-                          <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", statusStyles[value] ?? "bg-muted text-muted-foreground")}>{value}</span>
-                        ) : (
-                          <span className="font-medium text-foreground">{value}</span>
-                        )}
-                      </div>
-                    ))
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                      {([
+                        { label: "이름", value: detail.name },
+                        { label: "주민번호", value: detail.regNo },
+                        { label: "연락처", value: detail.contact },
+                        { label: "이메일", value: detail.email },
+                        { label: "주소", value: detail.address },
+                        { label: "계좌정보", value: detail.account },
+                        { label: "비고", value: detail.note || "-" },
+                        { label: "상태", value: detail.status, isStatus: true },
+                        { label: "등록일", value: detail.registeredAt },
+                      ] as { label: string; value: string; isStatus?: boolean }[]).map(({ label, value, isStatus }) => (
+                        <div key={label} className="flex gap-2">
+                          <span className="w-20 shrink-0 text-muted-foreground">{label}</span>
+                          {isStatus ? (
+                            <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", statusStyles[value] ?? "bg-muted text-muted-foreground")}>{value}</span>
+                          ) : (
+                            <span className="font-medium text-foreground">{value}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
-              </div>
 
-              <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">사업자 정보</p>
-                <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50/30 p-4">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-indigo-600">사업자 정보</p>
                   {editMode ? (
-                    <>
-                      <SelectField id="d-bizRegion" label="지역" value={detailForm.bizRegion} onChange={(v) => setDetailField("bizRegion", v)} options={REGION_OPTIONS} />
-                      <Field id="d-bizCity" label="시 / 구" value={detailForm.bizCity} onChange={(v) => setDetailField("bizCity", v)} placeholder="예: 수원시, 강남구" />
-                      <Field id="d-bizRegDate" label="사업자 등록일" value={detailForm.bizRegDate} onChange={(v) => setDetailField("bizRegDate", v)} type="date" />
-                    </>
+                    <BizInfosEditor
+                      bizInfos={detailForm.bizInfos}
+                      onChange={(infos) => setDetailField("bizInfos", infos)}
+                    />
                   ) : (
-                    [
-                      { label: "지역", value: detail.bizRegion || "-" },
-                      { label: "시 / 구", value: detail.bizCity || "-" },
-                      { label: "사업자 등록일", value: detail.bizRegDate || "-" },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="flex gap-2">
-                        <span className="w-24 shrink-0 text-muted-foreground">{label}</span>
-                        <span className="font-medium text-foreground">{value}</span>
-                      </div>
-                    ))
+                    <div className="flex flex-col gap-2">
+                      {detailBizInfos.map((biz, i) => (
+                        <div key={i} className="grid grid-cols-3 gap-x-6 rounded-md border border-border bg-background px-3 py-2 text-sm">
+                          {detailBizInfos.length > 1 && (
+                            <p className="col-span-3 mb-1 text-xs font-medium text-muted-foreground">사업자 {i + 1}</p>
+                          )}
+                          <div className="flex gap-2"><span className="text-muted-foreground">지역</span><span className="font-medium">{biz.region || "-"}</span></div>
+                          <div className="flex gap-2"><span className="text-muted-foreground">시/구</span><span className="font-medium">{biz.city || "-"}</span></div>
+                          <div className="flex gap-2"><span className="text-muted-foreground">등록일</span><span className="font-medium">{biz.regDate || "-"}</span></div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
           <DialogFooter>
             <Button variant="outline" onClick={() => { setDetail(null); setEditMode(false) }}>닫기</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* 등록 다이얼로그 */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="!w-[50vw] !max-w-[50vw] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>등록</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="!w-[60vw] !max-w-[60vw] max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>등록</DialogTitle></DialogHeader>
           {submitError && <p className="text-xs text-destructive">{submitError}</p>}
           <div className="flex flex-col gap-4 py-2">
             <div className="rounded-lg border border-border bg-muted/30 p-4">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">기본 정보</p>
               <div className="grid grid-cols-2 gap-x-8 gap-y-2.5 text-sm">
-                <Field id="r-name" label="이름 *" value={form.name} onChange={(v) => set("name", v)} placeholder="홍길동" />
-                <Field id="r-regNo" label="주민번호 *" value={form.regNo} onChange={(v) => set("regNo", v)} placeholder="000000-0000000" />
-                <Field id="r-contact" label="연락처" value={form.contact} onChange={(v) => set("contact", v)} placeholder="010-0000-0000" />
-                <Field id="r-email" label="이메일" value={form.email} onChange={(v) => set("email", v)} placeholder="example@email.com" />
-                <Field id="r-address" label="주소" value={form.address} onChange={(v) => set("address", v)} placeholder="시/도 구/군 읍/면/동" />
-                <Field id="r-account" label="계좌정보" value={form.account} onChange={(v) => set("account", v)} placeholder="은행명 000-000-000000" />
-                <Field id="r-note" label="비고" value={form.note} onChange={(v) => set("note", v)} placeholder="메모 입력" />
-                <SelectField id="r-status" label="상태" value={form.status} onChange={(v) => set("status", v)} options={STATUS_OPTIONS} />
+                <Field id="r-name" label="이름 *" value={form.name} onChange={(v) => setField("name", v)} placeholder="홍길동" />
+                <Field id="r-regNo" label="주민번호 *" value={form.regNo} onChange={(v) => setField("regNo", v)} placeholder="000000-0000000" />
+                <Field id="r-contact" label="연락처" value={form.contact} onChange={(v) => setField("contact", v)} placeholder="010-0000-0000" />
+                <Field id="r-email" label="이메일" value={form.email} onChange={(v) => setField("email", v)} placeholder="example@email.com" />
+                <Field id="r-address" label="주소" value={form.address} onChange={(v) => setField("address", v)} placeholder="시/도 구/군 읍/면/동" />
+                <Field id="r-account" label="계좌정보" value={form.account} onChange={(v) => setField("account", v)} placeholder="은행명 000-000-000000" />
+                <Field id="r-note" label="비고" value={form.note} onChange={(v) => setField("note", v)} placeholder="메모 입력" />
+                <SelectField id="r-status" label="상태" value={form.status} onChange={(v) => setField("status", v)} options={STATUS_OPTIONS} />
               </div>
             </div>
 
-            <div className="rounded-lg border border-border bg-muted/30 p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">사업자 정보</p>
-              <div className="grid grid-cols-2 gap-x-8 gap-y-2.5 text-sm">
-                <SelectField id="r-bizRegion" label="지역" value={form.bizRegion} onChange={(v) => set("bizRegion", v)} options={REGION_OPTIONS} />
-                <Field id="r-bizCity" label="시 / 구" value={form.bizCity} onChange={(v) => set("bizCity", v)} placeholder="예: 수원시, 강남구" />
-                <Field id="r-bizRegDate" label="사업자 등록일" value={form.bizRegDate} onChange={(v) => set("bizRegDate", v)} type="date" />
-              </div>
+            <div className="rounded-lg border border-indigo-200 bg-indigo-50/30 p-4">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-indigo-600">사업자 정보</p>
+              <BizInfosEditor
+                bizInfos={form.bizInfos}
+                onChange={(infos) => setField("bizInfos", infos)}
+              />
             </div>
           </div>
           <DialogFooter>

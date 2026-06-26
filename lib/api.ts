@@ -14,6 +14,7 @@ type ApiErrorBody = {
   status?: number
   error?: string
   message?: string
+  errors?: { field?: string; message?: string; defaultMessage?: string }[]
 }
 
 export type ApiFetchOptions = Omit<RequestInit, "body"> & {
@@ -90,6 +91,17 @@ export async function apiFetch<T = unknown>(
 async function extractErrorMessage(res: Response): Promise<string> {
   try {
     const body = (await res.json()) as ApiErrorBody
+    if (body?.errors && body.errors.length > 0) {
+      const details = body.errors
+        .map((e) => {
+          const field = e.field ?? ""
+          const msg = e.message || e.defaultMessage || ""
+          return field ? `${field}: ${msg}` : msg
+        })
+        .filter(Boolean)
+        .join("\n")
+      if (details) return details
+    }
     if (body?.message) return body.message
   } catch {
     // 응답 본문이 JSON이 아니면 상태 코드 기반 메시지로 fallback
@@ -117,13 +129,14 @@ export const api = {
 export async function login(
   username: string,
   password: string,
+  persist = false,
 ): Promise<LoginResponse> {
   const data = await api.post<LoginResponse>(
     "/api/auth/login",
     { username, password },
     { auth: false },
   )
-  saveAccessToken(data.accessToken)
+  saveAccessToken(data.accessToken, persist)
   return data
 }
 

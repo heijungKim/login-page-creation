@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { Plus } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -35,6 +35,15 @@ type Telecom = {
   accountNo: string
   memo: string
   registeredAt: string
+}
+
+type TelecomPayment = {
+  id: number
+  telecomId: number
+  paidDate: string
+  paidAmount: number
+  memo: string
+  createdAt: string
 }
 
 type PageResponse<T> = {
@@ -118,7 +127,7 @@ type FormData = {
 
 const emptyForm: FormData = {
   owner: "", phone: "", carrier: "SKT", cost: "",
-  paymentDay: "", bankName: "", accountNo: "", memo: "",
+  paymentDay: "매월 1일", bankName: "", accountNo: "", memo: "",
 }
 
 function TelecomDialog({
@@ -215,6 +224,11 @@ export function TelecomView() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [filters, setFilters] = useState<Record<string, string>>({})
+  const [detail, setDetail] = useState<Telecom | null>(null)
+  const [payments, setPayments] = useState<TelecomPayment[]>([])
+  const [paymentsLoading, setPaymentsLoading] = useState(false)
+  const [payForm, setPayForm] = useState({ paidDate: "", paidAmount: "", memo: "" })
+  const [paySubmitting, setPaySubmitting] = useState(false)
 
   const setFilter = (k: string, v: string) => setFilters((p) => ({ ...p, [k]: v }))
 
@@ -246,6 +260,52 @@ export function TelecomView() {
       }),
     )
   }, [rows, filters])
+
+  const loadPayments = useCallback(async (id: number) => {
+    setPaymentsLoading(true)
+    try {
+      const list = await api.get<TelecomPayment[]>(`/api/telecoms/${id}/payments`)
+      setPayments(list)
+    } catch {
+      setPayments([])
+    } finally {
+      setPaymentsLoading(false)
+    }
+  }, [])
+
+  function openDetail(row: Telecom) {
+    setDetail(row)
+    setPayForm({ paidDate: "", paidAmount: toCommaNumber(String(Math.round(row.cost))), memo: "" })
+    void loadPayments(row.id)
+  }
+
+  async function addPayment() {
+    if (!detail || !payForm.paidDate || !payForm.paidAmount) return
+    setPaySubmitting(true)
+    try {
+      await api.post(`/api/telecoms/${detail.id}/payments`, {
+        paidDate: payForm.paidDate,
+        paidAmount: Number(payForm.paidAmount.replace(/,/g, "")) || 0,
+        memo: payForm.memo,
+      })
+      setPayForm({ paidDate: "", paidAmount: toCommaNumber(String(Math.round(detail.cost))), memo: "" })
+      await loadPayments(detail.id)
+    } catch {
+      // ignore
+    } finally {
+      setPaySubmitting(false)
+    }
+  }
+
+  async function deletePayment(paymentId: number) {
+    if (!detail) return
+    try {
+      await api.delete(`/api/telecoms/${detail.id}/payments/${paymentId}`)
+      await loadPayments(detail.id)
+    } catch {
+      // ignore
+    }
+  }
 
   async function handleSubmit(data: FormData) {
     setSubmitError(null)
@@ -347,7 +407,7 @@ export function TelecomView() {
                   </tr>
                 ) : (
                   filteredRows.map((row) => (
-                    <tr key={row.id} className="group border-b border-border/50 transition-colors last:border-0 hover:bg-accent/50">
+                    <tr key={row.id} className="group cursor-pointer border-b border-border/50 transition-colors last:border-0 hover:bg-accent/50" onClick={() => openDetail(row)}>
                       {columns.map((col, colIdx) => (
                         <td
                           key={col.key}
@@ -378,6 +438,117 @@ export function TelecomView() {
       </Card>
 
       <TelecomDialog open={open} onOpenChange={setOpen} onSubmit={handleSubmit} />
+
+      <Dialog open={!!detail} onOpenChange={(o) => { if (!o) setDetail(null) }}>
+        <DialogContent className="max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-2xl">
+          <DialogHeader className="border-b border-border px-6 py-4">
+            <DialogTitle className="text-base font-semibold">통신비 상세</DialogTitle>
+          </DialogHeader>
+
+          {detail && (
+            <>
+              <div className="flex max-h-[calc(90svh-9rem)] flex-col overflow-y-auto px-6 py-5">
+                <div className="flex flex-col gap-5">
+                  <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[11px] text-muted-foreground">명의자</span>
+                      <span className="font-medium">{detail.owner || "-"}</span>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[11px] text-muted-foreground">연락처</span>
+                      <span>{detail.phone || "-"}</span>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[11px] text-muted-foreground">통신사</span>
+                      <CarrierBadge carrier={detail.carrier} />
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[11px] text-muted-foreground">통신비용</span>
+                      <span className="font-medium tabular-nums">₩{Math.round(detail.cost).toLocaleString("ko-KR")}</span>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[11px] text-muted-foreground">납부일</span>
+                      <span>{detail.paymentDay || "-"}</span>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[11px] text-muted-foreground">지급계좌</span>
+                      <span>{[detail.bankName, detail.accountNo].filter(Boolean).join(" ") || "-"}</span>
+                    </div>
+                    {detail.memo && (
+                      <div className="col-span-2 flex flex-col gap-0.5 sm:col-span-3">
+                        <span className="text-[11px] text-muted-foreground">비고</span>
+                        <span className="whitespace-pre-wrap text-muted-foreground">{detail.memo}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg border border-border p-4">
+                    <div className="mb-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        납입 내역 ({payments.length}건)
+                      </p>
+                    </div>
+
+                    <div className="mb-4 flex items-end gap-2">
+                      <div className="flex flex-col gap-1">
+                        <Label className="text-xs text-muted-foreground">납입일</Label>
+                        <Input type="date" value={payForm.paidDate} onChange={(e) => setPayForm((p) => ({ ...p, paidDate: e.target.value }))} className="h-9 w-36 text-sm" />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <Label className="text-xs text-muted-foreground">금액</Label>
+                        <Input value={payForm.paidAmount} onChange={(e) => setPayForm((p) => ({ ...p, paidAmount: toCommaNumber(e.target.value) }))} placeholder="금액" className="h-9 w-32 text-sm" />
+                      </div>
+                      <div className="flex flex-1 flex-col gap-1">
+                        <Label className="text-xs text-muted-foreground">메모</Label>
+                        <Input value={payForm.memo} onChange={(e) => setPayForm((p) => ({ ...p, memo: e.target.value }))} placeholder="메모 (선택)" className="h-9 text-sm" />
+                      </div>
+                      <Button size="sm" className="h-9 gap-1 px-3" disabled={paySubmitting || !payForm.paidDate || !payForm.paidAmount} onClick={addPayment}>
+                        <Plus className="h-3.5 w-3.5" />추가
+                      </Button>
+                    </div>
+
+                    {paymentsLoading ? (
+                      <p className="py-4 text-center text-sm text-muted-foreground">불러오는 중...</p>
+                    ) : payments.length === 0 ? (
+                      <p className="py-4 text-center text-sm text-muted-foreground">납입 내역이 없습니다.</p>
+                    ) : (
+                      <div className="max-h-60 overflow-auto">
+                        <table className="w-full border-collapse text-sm">
+                          <thead>
+                            <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                              <th className="px-2 py-2 font-medium">납입일</th>
+                              <th className="px-2 py-2 font-medium text-right">금액</th>
+                              <th className="px-2 py-2 font-medium">메모</th>
+                              <th className="w-10 px-2 py-2" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {payments.map((p) => (
+                              <tr key={p.id} className="border-b border-border/50 last:border-0">
+                                <td className="px-2 py-2">{p.paidDate}</td>
+                                <td className="px-2 py-2 text-right font-medium tabular-nums">₩{Math.round(p.paidAmount).toLocaleString("ko-KR")}</td>
+                                <td className="px-2 py-2 text-muted-foreground">{p.memo || "-"}</td>
+                                <td className="px-2 py-2">
+                                  <button type="button" className="text-muted-foreground hover:text-destructive transition-colors" onClick={() => deletePayment(p.id)}>
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <DialogFooter className="border-t border-border px-6 py-5">
+                <Button variant="outline" onClick={() => setDetail(null)}>닫기</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

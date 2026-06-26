@@ -1,4 +1,5 @@
 const TOKEN_KEY = "freed_erp_access_token"
+const PERSIST_KEY = "freed_erp_persist"
 
 const DEFAULT_API_PORT = process.env.NEXT_PUBLIC_API_PORT ?? "8080"
 
@@ -33,19 +34,26 @@ export class ApiError extends Error {
   }
 }
 
-export function saveAccessToken(token: string): void {
+export function saveAccessToken(token: string, persist = false): void {
   if (typeof window === "undefined") return
-  window.localStorage.setItem(TOKEN_KEY, token)
+  if (persist) {
+    window.localStorage.setItem(TOKEN_KEY, token)
+    window.localStorage.setItem(PERSIST_KEY, "1")
+  } else {
+    window.sessionStorage.setItem(TOKEN_KEY, token)
+  }
 }
 
 export function getAccessToken(): string | null {
   if (typeof window === "undefined") return null
-  return window.localStorage.getItem(TOKEN_KEY)
+  return window.localStorage.getItem(TOKEN_KEY) ?? window.sessionStorage.getItem(TOKEN_KEY)
 }
 
 export function clearAccessToken(): void {
   if (typeof window === "undefined") return
   window.localStorage.removeItem(TOKEN_KEY)
+  window.localStorage.removeItem(PERSIST_KEY)
+  window.sessionStorage.removeItem(TOKEN_KEY)
 }
 
 export function isAuthenticated(): boolean {

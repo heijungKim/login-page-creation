@@ -208,6 +208,7 @@ export function ClosedCorporationsView() {
                   <ClosedSection title="기본 정보">
                     <DF label="구분"><CategoryBadge category={detail.category} /></DF>
                     <DF label="상태"><StatusBadge status={detail.status} /></DF>
+                    <DF label="폐업일" value={detail.closeDate} />
                     <DF label="법인명" value={detail.name} />
                     <DF label="지역" value={detail.region} />
                     <DF label="개업일" value={detail.openDate} />

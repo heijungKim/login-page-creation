@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useMemo, useState } from "react"
-import { Plus } from "lucide-react"
+import { MessageSquareText, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -24,9 +24,12 @@ import {
 } from "@/components/ui/dialog"
 import {
   CorporationFormDialog,
+  ShareholdersEditor,
   CATEGORY_OPTIONS,
   STATUS_OPTIONS,
+  formatResidentNo,
   type Corporation,
+  type Shareholder,
 } from "@/components/erp/corporation-form-dialog"
 import { useCorporations } from "@/components/erp/corporations-context"
 
@@ -64,7 +67,7 @@ type Column = {
 
 const columns: Column[] = [
   { key: "category", label: "구분", minWidth: "130px", filterOptions: CATEGORY_OPTIONS },
-  { key: "status", label: "상태", minWidth: "110px", filterOptions: STATUS_OPTIONS },
+  { key: "status", label: "상태", minWidth: "130px", filterOptions: STATUS_OPTIONS },
   { key: "name", label: "법인명", minWidth: "140px" },
   { key: "region", label: "지역", minWidth: "120px" },
   { key: "openDate", label: "개업일", minWidth: "120px" },
@@ -72,13 +75,13 @@ const columns: Column[] = [
   { key: "corpNo", label: "법인 번호", minWidth: "140px" },
   { key: "ceo", label: "법인 대표", minWidth: "100px" },
   { key: "auditorDirector", label: "감사/사내이사", minWidth: "130px" },
-  { key: "shareholder", label: "주주", minWidth: "120px" },
-  { key: "birthDate", label: "생년월일", minWidth: "120px" },
+  { key: "shareholders", label: "주주", minWidth: "160px" },
+  { key: "residentNo", label: "주민번호", minWidth: "140px" },
   { key: "phone", label: "휴대폰 번호", minWidth: "130px" },
   { key: "phonePlan", label: "휴대폰 요금제", minWidth: "120px" },
   { key: "bizAddress", label: "사업 소재지", minWidth: "200px" },
   { key: "bizEmail", label: "사업자 메일", minWidth: "180px" },
-  { key: "account", label: "계좌번호", minWidth: "170px" },
+  { key: "corpAccountNo", label: "법인계좌", minWidth: "170px" },
   { key: "certCorp", label: "법인 인증서", minWidth: "160px" },
   { key: "certPersonal", label: "개인 인증서", minWidth: "160px" },
   { key: "certExpiry", label: "인증서 만료일", minWidth: "120px" },
@@ -92,39 +95,51 @@ const columns: Column[] = [
 ]
 
 export function CorporationsView() {
-  const { rows, loading, error, createCorporation, updateCorporation } = useCorporations()
+  const { rows, loading, error, createCorporation, updateCorporation, removeCorporation } = useCorporations()
   const [open, setOpen] = useState(false)
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [detail, setDetail] = useState<Corporation | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<Corporation | null>(null)
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [memoPopup, setMemoPopup] = useState<string | null>(null)
+  const [memoTooltip, setMemoTooltip] = useState<{ text: string; x: number; y: number } | null>(null)
 
   // 좌측 고정(sticky) 열(구분/상태/법인명)의 누적 left 위치
-  const stickyOffsets = [0, 130, 240]
+  const stickyOffsets = [0, 130, 260]
 
   async function handleSubmit(corp: Corporation) {
-    setSubmitError(null)
+    await createCorporation(corp)
+  }
+
+  async function handleDelete() {
+    if (!detail?.id) return
+    setSubmitting(true)
     try {
-      await createCorporation(corp)
+      await removeCorporation(detail.id)
+      setDetail(null)
+      setDeleteConfirm(false)
+      setIsEditing(false)
     } catch (err) {
-      const message = err instanceof Error ? err.message : "법인 등록에 실패했습니다."
-      setSubmitError(message)
-      throw err
+      setSaveError(err instanceof Error ? err.message : "법인 삭제에 실패했습니다.")
+      setDeleteConfirm(false)
+    } finally {
+      setSubmitting(false)
     }
   }
 
   async function handleSave() {
     if (!editForm?.id || !detail) return
-    setSubmitError(null)
+    setSaveError(null)
     setSubmitting(true)
     try {
       const updated = await updateCorporation(editForm.id, editForm)
       setDetail(updated)
       setIsEditing(false)
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "법인 수정에 실패했습니다.")
+      setSaveError(err instanceof Error ? err.message : "법인 수정에 실패했습니다.")
     } finally {
       setSubmitting(false)
     }
@@ -136,6 +151,13 @@ export function CorporationsView() {
 
   function setFilter(key: string, value: string) {
     setFilters((prev) => ({ ...prev, [key]: value }))
+  }
+
+  function shareholdersText(row: Corporation) {
+    return (row.shareholders || [])
+      .filter((s) => s.name)
+      .map((s) => (s.equity ? `${s.name}(${s.equity})` : s.name))
+      .join(", ")
   }
 
   const activeRows = useMemo(() => rows.filter((r) => r.status !== "폐업"), [rows])
@@ -156,7 +178,10 @@ export function CorporationsView() {
           if (col.filterOptions) {
             return String(row[col.key] ?? "") === term
           }
-          return String(row[col.key] ?? "").toLowerCase().includes(term.toLowerCase())
+          const cellText = col.key === "shareholders"
+            ? shareholdersText(row)
+            : String(row[col.key] ?? "")
+          return cellText.toLowerCase().includes(term.toLowerCase())
         }),
       )
       .sort((a, b) => {
@@ -184,11 +209,6 @@ export function CorporationsView() {
       {error ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {error}
-        </div>
-      ) : null}
-      {submitError ? (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
-          {submitError}
         </div>
       ) : null}
 
@@ -266,14 +286,29 @@ export function CorporationsView() {
                           style={{ left: colIdx < 3 ? stickyOffsets[colIdx] : undefined }}
                         >
                           {col.key === "status" ? (
-                            <StatusBadge status={row.status} />
+                            <div className="flex items-center gap-1.5">
+                              <StatusBadge status={row.status} />
+                              {row.status === "진행중" && row.progressMemo && (
+                                <button
+                                  type="button"
+                                  className="text-yellow-600 hover:text-yellow-800 transition-colors"
+                                  onClick={(e) => { e.stopPropagation(); setMemoPopup(row.progressMemo) }}
+                                  onMouseEnter={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMemoTooltip({ text: row.progressMemo, x: r.left + r.width / 2, y: r.top }) }}
+                                  onMouseLeave={() => setMemoTooltip(null)}
+                                >
+                                  <MessageSquareText className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
                           ) : col.key === "category" ? (
                             <CategoryBadge category={row.category} />
                           ) : col.key === "name" ? (
                             <span className="font-medium text-foreground">{row.name}</span>
+                          ) : col.key === "shareholders" ? (
+                            <span>{shareholdersText(row) || "-"}</span>
                           ) : (
                             <span className={col.key.startsWith("note") ? "text-muted-foreground" : undefined}>
-                              {row[col.key] || "-"}
+                              {String(row[col.key] ?? "") || "-"}
                             </span>
                           )}
                         </td>
@@ -289,7 +324,37 @@ export function CorporationsView() {
 
       <CorporationFormDialog open={open} onOpenChange={setOpen} onSubmit={handleSubmit} />
 
-      <Dialog open={!!detail} onOpenChange={(o) => { if (!o) { setDetail(null); setIsEditing(false) } }}>
+      <Dialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>법인 삭제</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-semibold text-foreground">{detail?.name}</span> 법인을 삭제합니다.<br />
+            삭제된 데이터는 복구할 수 없습니다.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" disabled={submitting} onClick={() => setDeleteConfirm(false)}>취소</Button>
+            <Button variant="destructive" disabled={submitting} onClick={handleDelete}>
+              {submitting ? "삭제 중..." : "삭제"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!memoPopup} onOpenChange={(o) => { if (!o) setMemoPopup(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold">진행 메모</DialogTitle>
+          </DialogHeader>
+          <p className="whitespace-pre-wrap text-sm text-foreground">{memoPopup}</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMemoPopup(null)}>닫기</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!detail} onOpenChange={(o) => { if (!o) { setDetail(null); setIsEditing(false); setDeleteConfirm(false); setSaveError(null) } }}>
         <DialogContent className="max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-3xl">
           <DialogHeader className="border-b border-border px-6 py-4">
             <DialogTitle className="text-base font-semibold">법인 상세 정보</DialogTitle>
@@ -331,6 +396,12 @@ export function CorporationsView() {
                             <SelectContent>{STATUS_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
                           </Select>
                         </div>
+                        {editForm.status === "진행중" && (
+                          <EF label="진행 메모" value={editForm.progressMemo} onChange={(v) => setEdit("progressMemo", v)} multiline className="col-span-full" />
+                        )}
+                        {editForm.status === "폐업" && (
+                          <EF label="폐업일" type="date" value={editForm.closeDate} onChange={(v) => setEdit("closeDate", v)} />
+                        )}
                         <EF label="법인명" value={editForm.name} onChange={(v) => setEdit("name", v)} />
                         <EF label="지역" value={editForm.region} onChange={(v) => setEdit("region", v)} />
                         <EF label="개업일" type="date" value={editForm.openDate} onChange={(v) => setEdit("openDate", v)} />
@@ -340,7 +411,25 @@ export function CorporationsView() {
                     ) : (
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
                         <DetailField label="구분"><CategoryBadge category={detail.category} /></DetailField>
-                        <DetailField label="상태"><StatusBadge status={detail.status} /></DetailField>
+                        <DetailField label="상태">
+                          <div className="flex items-center gap-1.5">
+                            <StatusBadge status={detail.status} />
+                            {detail.status === "진행중" && detail.progressMemo && (
+                              <button
+                                type="button"
+                                className="text-yellow-600 hover:text-yellow-800 transition-colors"
+                                onClick={() => setMemoPopup(detail.progressMemo)}
+                                onMouseEnter={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMemoTooltip({ text: detail.progressMemo, x: r.left + r.width / 2, y: r.top }) }}
+                                onMouseLeave={() => setMemoTooltip(null)}
+                              >
+                                <MessageSquareText className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </DetailField>
+                        {detail.status === "폐업" && (
+                          <DetailField label="폐업일" value={detail.closeDate} />
+                        )}
                         <DetailField label="법인명" value={detail.name} />
                         <DetailField label="지역" value={detail.region} />
                         <DetailField label="개업일" value={detail.openDate} />
@@ -355,19 +444,47 @@ export function CorporationsView() {
                       <>
                         <EF label="법인 대표" value={editForm.ceo} onChange={(v) => setEdit("ceo", v)} />
                         <EF label="감사/사내이사" value={editForm.auditorDirector} onChange={(v) => setEdit("auditorDirector", v)} />
-                        <EF label="주주" value={editForm.shareholder} onChange={(v) => setEdit("shareholder", v)} />
-                        <EF label="생년월일" type="date" value={editForm.birthDate} onChange={(v) => setEdit("birthDate", v)} />
+                        <div className="flex flex-col gap-1.5">
+                          <Label className="text-xs text-muted-foreground">주민번호</Label>
+                          <Input
+                            value={editForm.residentNo}
+                            onChange={(e) => setEdit("residentNo", formatResidentNo(e.target.value))}
+                            placeholder="000000-0000000"
+                            maxLength={14}
+                          />
+                        </div>
                         <EF label="휴대폰 번호" value={editForm.phone} onChange={(v) => setEdit("phone", v)} />
-                        <EF label="휴대폰 요금제" value={editForm.phonePlan} onChange={(v) => setEdit("phonePlan", v)} />
+                        <EF label="휴대폰 요금제" value={editForm.phonePlan} onChange={(v) => setEdit("phonePlan", v)} multiline className="col-span-full" />
+                        <ShareholdersEditor
+                          shareholders={editForm.shareholders}
+                          onChange={(s) => setEdit("shareholders", s)}
+                        />
                       </>
                     ) : (
                       <>
                         <DetailField label="법인 대표" value={detail.ceo} />
                         <DetailField label="감사/사내이사" value={detail.auditorDirector} />
-                        <DetailField label="주주" value={detail.shareholder} />
-                        <DetailField label="생년월일" value={detail.birthDate} />
+                        <DetailField label="주민번호" value={detail.residentNo} />
                         <DetailField label="휴대폰 번호" value={detail.phone} />
-                        <DetailField label="휴대폰 요금제" value={detail.phonePlan} />
+                        <div className="col-span-full flex flex-col gap-0.5">
+                          <span className="text-[11px] text-muted-foreground">휴대폰 요금제</span>
+                          <span className="whitespace-pre-wrap text-sm font-medium text-foreground">{detail.phonePlan || "-"}</span>
+                        </div>
+                        <div className="col-span-full flex flex-col gap-1.5">
+                          <span className="text-[11px] text-muted-foreground">주주</span>
+                          {(detail.shareholders || []).filter((s) => s.name).length === 0 ? (
+                            <span className="text-sm font-medium text-foreground">-</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {detail.shareholders.filter((s) => s.name).map((s, i) => (
+                                <span key={i} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 px-2.5 py-1 text-sm">
+                                  <span className="font-medium">{s.name}</span>
+                                  {s.equity && <span className="text-muted-foreground">{s.equity}</span>}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </>
                     )}
                   </EditSection>
@@ -377,13 +494,43 @@ export function CorporationsView() {
                       <>
                         <EF label="사업 소재지" value={editForm.bizAddress} onChange={(v) => setEdit("bizAddress", v)} className="col-span-2" />
                         <EF label="사업자 메일" value={editForm.bizEmail} onChange={(v) => setEdit("bizEmail", v)} />
-                        <EF label="계좌번호" value={editForm.account} onChange={(v) => setEdit("account", v)} className="col-span-2" />
                       </>
                     ) : (
                       <>
                         <DetailField label="사업 소재지" value={detail.bizAddress} className="col-span-2" />
                         <DetailField label="사업자 메일" value={detail.bizEmail} />
-                        <DetailField label="계좌번호" value={detail.account} className="col-span-2" />
+                      </>
+                    )}
+                  </EditSection>
+
+                  <EditSection title="법인 계좌">
+                    {isEditing && editForm ? (
+                      <>
+                        <EF label="은행" value={editForm.corpBankName} onChange={(v) => setEdit("corpBankName", v)} />
+                        <EF label="계좌번호" value={editForm.corpAccountNo} onChange={(v) => setEdit("corpAccountNo", v)} />
+                        <EF label="계좌 비밀번호" value={editForm.corpAccountPw} onChange={(v) => setEdit("corpAccountPw", v)} />
+                      </>
+                    ) : (
+                      <>
+                        <DetailField label="은행" value={detail.corpBankName} />
+                        <DetailField label="계좌번호" value={detail.corpAccountNo} />
+                        <DetailField label="계좌 비밀번호" value={detail.corpAccountPw} />
+                      </>
+                    )}
+                  </EditSection>
+
+                  <EditSection title="개인 계좌">
+                    {isEditing && editForm ? (
+                      <>
+                        <EF label="은행" value={editForm.personalBankName} onChange={(v) => setEdit("personalBankName", v)} />
+                        <EF label="계좌번호" value={editForm.personalAccountNo} onChange={(v) => setEdit("personalAccountNo", v)} />
+                        <EF label="계좌 비밀번호" value={editForm.personalAccountPw} onChange={(v) => setEdit("personalAccountPw", v)} />
+                      </>
+                    ) : (
+                      <>
+                        <DetailField label="은행" value={detail.personalBankName} />
+                        <DetailField label="계좌번호" value={detail.personalAccountNo} />
+                        <DetailField label="계좌 비밀번호" value={detail.personalAccountPw} />
                       </>
                     )}
                   </EditSection>
@@ -408,7 +555,7 @@ export function CorporationsView() {
                     {isEditing && editForm ? (
                       <>
                         <EF label="아이디" value={editForm.iros} onChange={(v) => setEdit("iros", v)} />
-                        <EF label="비밀번호" type="password" value={editForm.irosPw} onChange={(v) => setEdit("irosPw", v)} />
+                        <EF label="비밀번호" value={editForm.irosPw} onChange={(v) => setEdit("irosPw", v)} />
                         <EF label="사용자 등록번호" value={editForm.irosUserNo} onChange={(v) => setEdit("irosUserNo", v)} />
                       </>
                     ) : (
@@ -424,7 +571,7 @@ export function CorporationsView() {
                     {isEditing && editForm ? (
                       <>
                         <EF label="홈택스 아이디" value={editForm.hometaxId} onChange={(v) => setEdit("hometaxId", v)} />
-                        <EF label="홈택스 비밀번호" type="password" value={editForm.hometaxPw} onChange={(v) => setEdit("hometaxPw", v)} />
+                        <EF label="홈택스 비밀번호" value={editForm.hometaxPw} onChange={(v) => setEdit("hometaxPw", v)} />
                       </>
                     ) : (
                       <>
@@ -448,13 +595,38 @@ export function CorporationsView() {
                   )}
                 </div>
               </div>
-              <DialogFooter className="border-t border-border px-6 py-4">
-                <Button variant="outline" onClick={() => { setDetail(null); setIsEditing(false) }}>닫기</Button>
+              {saveError && (
+                <div className="border-t border-destructive/20 bg-destructive/5 px-6 py-3">
+                  <p className="text-sm text-destructive">{saveError}</p>
+                </div>
+              )}
+              <DialogFooter className="border-t border-border px-6 py-5">
+                <div className="flex w-full items-center justify-between">
+                  <Button
+                    variant="outline"
+                    className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+                    disabled={isEditing || submitting}
+                    onClick={() => setDeleteConfirm(true)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    삭제
+                  </Button>
+                  <Button variant="outline" onClick={() => { setDetail(null); setIsEditing(false) }}>닫기</Button>
+                </div>
               </DialogFooter>
             </>
           )}
         </DialogContent>
       </Dialog>
+
+      {memoTooltip && (
+        <div
+          className="pointer-events-none fixed z-[100] whitespace-pre-wrap rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg"
+          style={{ top: memoTooltip.y - 8, left: memoTooltip.x, transform: "translate(-50%, -100%)", minWidth: 160, maxWidth: 320 }}
+        >
+          {memoTooltip.text}
+        </div>
+      )}
     </div>
   )
 }
@@ -493,17 +665,23 @@ function EF({
   onChange,
   type = "text",
   className,
+  multiline,
 }: {
   label: string
   value: string
   onChange: (v: string) => void
   type?: string
   className?: string
+  multiline?: boolean
 }) {
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} />
+      {multiline ? (
+        <Textarea value={value} onChange={(e) => onChange(e.target.value)} rows={3} />
+      ) : (
+        <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} />
+      )}
     </div>
   )
 }

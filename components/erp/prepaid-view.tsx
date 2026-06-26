@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Plus, Pencil, Check, X } from "lucide-react"
+import { Plus, Pencil, Check, X, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -19,6 +19,8 @@ type PrepaidEntry = {
   amount: number
   payDate: string
   status: string
+  phone: string
+  residentNo: string
   memo: string
   registeredAt: string
 }
@@ -26,6 +28,8 @@ type PrepaidEntry = {
 type PrepaidPersonSummary = {
   personKey: string
   name: string
+  phone: string
+  residentNo: string
   latestStatus: string
   latestPayDate: string
   paidTotal: number
@@ -52,8 +56,8 @@ function StatusBadge({ status }: { status: string }) {
 
 const fmt = (n: number) => Math.round(n).toLocaleString("ko-KR") + "원"
 
-type FormData = { name: string; amount: string; payDate: string; status: string; memo: string }
-const emptyForm: FormData = { name: "", amount: "", payDate: "", status: "진행중", memo: "" }
+type FormData = { name: string; phone: string; residentNo: string; status: string; memo: string }
+const emptyForm: FormData = { name: "", phone: "", residentNo: "", status: "진행중", memo: "" }
 
 const columns = [
   { key: "name", label: "이름", minWidth: "100px", filterOptions: undefined },
@@ -94,7 +98,8 @@ export function PrepaidView() {
   const [detailLatest, setDetailLatest] = useState<PrepaidEntry | null>(null)
   const [detailForm, setDetailForm] = useState({ payDate: today, amount: "", memo: "", type: "지급" })
   const [editMode, setEditMode] = useState(false)
-  const [editFields, setEditFields] = useState({ name: "", status: "", memo: "" })
+  const [editingEntry, setEditingEntry] = useState<{ id: number; payDate: string; amount: string; type: string; memo: string } | null>(null)
+  const [editFields, setEditFields] = useState({ name: "", phone: "", residentNo: "", status: "", memo: "" })
   const [form, setForm] = useState<FormData>(emptyForm)
   const [filters, setFilters] = useState<Partial<Record<ColKey, string>>>({})
   const [submitting, setSubmitting] = useState(false)
@@ -134,7 +139,7 @@ export function PrepaidView() {
       const latest = history.find((h) => h.id === row.latestId) ?? history[0] ?? null
       setDetailLatest(latest)
       if (latest) {
-        setEditFields({ name: latest.name, status: latest.status, memo: latest.memo || "" })
+        setEditFields({ name: latest.name, phone: latest.phone || "", residentNo: latest.residentNo || "", status: latest.status, memo: latest.memo || "" })
       }
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : "내역을 불러오지 못했습니다.")
@@ -175,22 +180,19 @@ export function PrepaidView() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitError(null)
-    if (!form.name.trim() || !form.amount.trim() || !form.payDate) {
-      setSubmitError("이름, 금액, 지급 날짜는 필수입니다.")
-      return
-    }
-    const parsed = parseInt(form.amount.replace(/[^0-9-]/g, ""), 10)
-    if (isNaN(parsed)) {
-      setSubmitError("금액이 올바르지 않습니다.")
+    if (!form.name.trim()) {
+      setSubmitError("이름은 필수입니다.")
       return
     }
     setSubmitting(true)
     try {
       await api.post<PrepaidEntry>("/api/prepaid", {
         name: form.name.trim(),
-        amount: parsed,
-        payDate: form.payDate,
+        amount: 0,
+        payDate: today,
         status: form.status,
+        phone: form.phone,
+        residentNo: form.residentNo,
         memo: form.memo,
       })
       setForm(emptyForm)
@@ -214,6 +216,8 @@ export function PrepaidView() {
         amount: detailLatest.amount,
         payDate: detailLatest.payDate,
         status: editFields.status,
+        phone: editFields.phone,
+        residentNo: editFields.residentNo,
         memo: editFields.memo,
       })
       setEditMode(false)
@@ -240,6 +244,8 @@ export function PrepaidView() {
         amount: signed,
         payDate: detailForm.payDate,
         status: detail.latestStatus,
+        phone: detail.phone,
+        residentNo: detail.residentNo,
         memo: detailForm.memo,
       })
       setDetailForm({ payDate: today, amount: "", memo: "", type: "지급" })
@@ -247,6 +253,47 @@ export function PrepaidView() {
       await openDetail(detail)
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : "추가에 실패했습니다.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleUpdateEntry() {
+    if (!detail || !editingEntry) return
+    const raw = parseInt(editingEntry.amount.replace(/[^0-9]/g, ""), 10)
+    if (isNaN(raw)) return
+    const signed = editingEntry.type === "차감" ? -Math.abs(raw) : Math.abs(raw)
+    setSubmitting(true)
+    try {
+      await api.put(`/api/prepaid/${editingEntry.id}`, {
+        name: detail.name,
+        personKey: detail.personKey,
+        amount: signed,
+        payDate: editingEntry.payDate,
+        status: detail.latestStatus,
+        phone: detail.phone,
+        residentNo: detail.residentNo,
+        memo: editingEntry.memo,
+      })
+      setEditingEntry(null)
+      await refresh()
+      await openDetail(detail)
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "수정에 실패했습니다.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleDeleteEntry(entryId: number) {
+    if (!detail) return
+    setSubmitting(true)
+    try {
+      await api.delete(`/api/prepaid/${entryId}`)
+      await refresh()
+      await openDetail(detail)
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "삭제에 실패했습니다.")
     } finally {
       setSubmitting(false)
     }
@@ -274,6 +321,27 @@ export function PrepaidView() {
       {error ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">{error}</div>
       ) : null}
+
+      <div className="grid grid-cols-3 gap-4">
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">총 지급</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums text-blue-600">{fmt(totalPaid)}</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">총 차감</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums text-red-500">{fmt(totalDeducted)}</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">순합계</p>
+            <p className={cn("mt-1 text-xl font-semibold tabular-nums", totalNet >= 0 ? "text-emerald-600" : "text-red-500")}>{fmt(totalNet)}</p>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card className="overflow-hidden py-0 shadow-sm">
         <CardContent className="p-0">
@@ -365,24 +433,13 @@ export function PrepaidView() {
                   ))
                 )}
               </tbody>
-              {filteredSummaries.length > 0 && (
-                <tfoot>
-                  <tr className="border-t-2 border-border bg-muted/50">
-                    <td className="px-3 py-2.5 text-xs font-semibold text-muted-foreground">총합계</td>
-                    <td className={cn("px-3 py-2.5 font-semibold tabular-nums", totalNet > 0 ? "text-blue-600" : totalNet < 0 ? "text-red-600" : "text-foreground")}>{fmt(totalNet)}</td>
-                    <td className="px-3 py-2.5 font-semibold tabular-nums">{fmt(totalPaid)}</td>
-                    <td className="px-3 py-2.5 font-semibold tabular-nums text-red-600">{fmt(totalDeducted)}</td>
-                    <td colSpan={columns.length - 4}></td>
-                  </tr>
-                </tfoot>
-              )}
             </table>
           </div>
         </CardContent>
       </Card>
 
       <Dialog open={!!detail} onOpenChange={(o) => { if (!o) closeDetail() }}>
-        <DialogContent className="!w-[50vw] !max-w-[50vw] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="!w-[70vw] !max-w-[70vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>선지급 상세 정보</DialogTitle>
           </DialogHeader>
@@ -399,7 +456,7 @@ export function PrepaidView() {
                       className="h-7 gap-1 px-2 text-xs"
                       onClick={() => {
                         setEditMode(true)
-                        setEditFields({ name: detailLatest.name, status: detailLatest.status, memo: detailLatest.memo || "" })
+                        setEditFields({ name: detailLatest.name, phone: detailLatest.phone || "", residentNo: detailLatest.residentNo || "", status: detailLatest.status, memo: detailLatest.memo || "" })
                       }}
                     >
                       <Pencil className="h-3 w-3" />수정
@@ -460,6 +517,34 @@ export function PrepaidView() {
                       )}
                     </div>
                   </div>
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2">
+                      <span className="shrink-0 text-muted-foreground">연락처</span>
+                      {editMode ? (
+                        <Input
+                          value={editFields.phone}
+                          onChange={(e) => setEditFields((p) => ({ ...p, phone: e.target.value }))}
+                          className="h-7 w-36 text-sm"
+                          placeholder="010-0000-0000"
+                        />
+                      ) : (
+                        <span>{detail.phone || "-"}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="shrink-0 text-muted-foreground">주민번호</span>
+                      {editMode ? (
+                        <Input
+                          value={editFields.residentNo}
+                          onChange={(e) => setEditFields((p) => ({ ...p, residentNo: e.target.value }))}
+                          className="h-7 w-36 text-sm"
+                          placeholder="000000-0000000"
+                        />
+                      ) : (
+                        <span>{detail.residentNo || "-"}</span>
+                      )}
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2">
                     <span className="shrink-0 text-muted-foreground">메모</span>
                     {editMode ? (
@@ -489,18 +574,55 @@ export function PrepaidView() {
                           <th className="px-3 py-2 font-medium">금액</th>
                           <th className="px-3 py-2 font-medium">비고</th>
                           <th className="px-3 py-2 font-medium">등록일</th>
+                          <th className="w-20 px-3 py-2" />
                         </tr>
                       </thead>
                       <tbody>
-                        {detailHistory.map((r) => (
-                          <tr key={r.id} className="border-t border-border/50">
-                            <td className="px-3 py-2 tabular-nums">{r.payDate}</td>
-                            <td className="px-3 py-2">{r.amount >= 0 ? "지급" : "차감"}</td>
-                            <td className={cn("px-3 py-2 font-medium tabular-nums", r.amount >= 0 ? "text-blue-600" : "text-red-600")}>{fmt(Math.abs(r.amount))}</td>
-                            <td className="px-3 py-2 text-muted-foreground">{r.memo || "-"}</td>
-                            <td className="px-3 py-2 tabular-nums text-muted-foreground">{r.registeredAt}</td>
-                          </tr>
-                        ))}
+                        {detailHistory.map((r) =>
+                          editingEntry?.id === r.id ? (
+                            <tr key={r.id} className="border-t border-border/50 bg-accent/30">
+                              <td className="px-2 py-1.5">
+                                <Input type="date" value={editingEntry.payDate} onChange={(e) => setEditingEntry((p) => p ? { ...p, payDate: e.target.value } : p)} className="h-7 text-xs w-32" />
+                              </td>
+                              <td className="px-2 py-1.5">
+                                <Select value={editingEntry.type} onValueChange={(v) => setEditingEntry((p) => p ? { ...p, type: v } : p)}>
+                                  <SelectTrigger className="h-7 text-xs w-16"><span>{editingEntry.type}</span></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="지급">지급</SelectItem>
+                                    <SelectItem value="차감">차감</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </td>
+                              <td className="px-2 py-1.5">
+                                <Input value={editingEntry.amount} onChange={(e) => setEditingEntry((p) => p ? { ...p, amount: toCommaNumber(e.target.value) } : p)} className="h-7 text-xs w-28" />
+                              </td>
+                              <td className="px-2 py-1.5">
+                                <Input value={editingEntry.memo} onChange={(e) => setEditingEntry((p) => p ? { ...p, memo: e.target.value } : p)} className="h-7 text-xs" placeholder="메모" />
+                              </td>
+                              <td className="px-2 py-1.5" />
+                              <td className="px-2 py-1.5">
+                                <div className="flex gap-1">
+                                  <button type="button" className="text-green-600 hover:text-green-700 transition-colors" disabled={submitting} onClick={handleUpdateEntry}><Check className="h-4 w-4" /></button>
+                                  <button type="button" className="text-muted-foreground hover:text-foreground transition-colors" onClick={() => setEditingEntry(null)}><X className="h-4 w-4" /></button>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : (
+                            <tr key={r.id} className="border-t border-border/50">
+                              <td className="px-3 py-2 tabular-nums">{r.payDate}</td>
+                              <td className="px-3 py-2">{r.amount >= 0 ? "지급" : "차감"}</td>
+                              <td className={cn("px-3 py-2 font-medium tabular-nums", r.amount >= 0 ? "text-blue-600" : "text-red-600")}>{fmt(Math.abs(r.amount))}</td>
+                              <td className="px-3 py-2 text-muted-foreground">{r.memo || "-"}</td>
+                              <td className="px-3 py-2 tabular-nums text-muted-foreground">{r.registeredAt}</td>
+                              <td className="px-3 py-2">
+                                <div className="flex gap-1.5">
+                                  <button type="button" className="text-muted-foreground hover:text-foreground transition-colors" onClick={() => setEditingEntry({ id: r.id, payDate: r.payDate, amount: toCommaNumber(String(Math.abs(r.amount))), type: r.amount >= 0 ? "지급" : "차감", memo: r.memo })}><Pencil className="h-3.5 w-3.5" /></button>
+                                  <button type="button" className="text-muted-foreground hover:text-destructive transition-colors" onClick={() => handleDeleteEntry(r.id)}><Trash2 className="h-3.5 w-3.5" /></button>
+                                </div>
+                              </td>
+                            </tr>
+                          ),
+                        )}
                       </tbody>
                       <tfoot>
                         <tr className="border-t-2 border-border bg-muted/40">
@@ -592,10 +714,8 @@ export function PrepaidView() {
               <p className="text-xs text-muted-foreground -mt-2">
                 동일한 이름 입력 시 선지급 합계에 자동으로 누적됩니다.
               </p>
-              <Field id="pp-amount" label="선지급 금액 (원) *" value={form.amount}
-                onChange={(v) => set("amount", toCommaNumber(v))} placeholder="예: 500,000" />
-              <Field id="pp-paydate" label="지급 날짜 *" value={form.payDate}
-                onChange={(v) => set("payDate", v)} type="date" />
+              <Field id="pp-phone" label="연락처" value={form.phone} onChange={(v) => set("phone", v)} placeholder="010-0000-0000" />
+              <Field id="pp-residentno" label="주민번호" value={form.residentNo} onChange={(v) => set("residentNo", v)} placeholder="000000-0000000" />
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="pp-status" className="text-xs text-muted-foreground">상태</Label>
                 <Select value={form.status} onValueChange={(v) => set("status", v ?? "")}>

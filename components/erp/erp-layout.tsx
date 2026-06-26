@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { ErpSidebar, menuItems } from "@/components/erp/erp-sidebar"
 import { ErpHeader } from "@/components/erp/erp-header"
 import { DashboardView } from "@/components/erp/dashboard-view"
@@ -16,9 +16,30 @@ import { LeaseView } from "@/components/erp/lease-view"
 import { CorporationsProvider } from "@/components/erp/corporations-context"
 import { ClosedCorporationsView } from "@/components/erp/closed-corporations-view"
 
+const validIds = new Set(menuItems.map((m) => m.id))
+
+function getInitialPage(): string {
+  if (typeof window === "undefined") return "dashboard"
+  const hash = window.location.hash.slice(1)
+  return validIds.has(hash) ? hash : "dashboard"
+}
+
 export function ErpLayout({ onLogout }: { onLogout: () => void }) {
-  const [active, setActive] = useState("dashboard")
+  const [active, setActive] = useState(getInitialPage)
   const activeLabel = menuItems.find((m) => m.id === active)?.label ?? "대시보드"
+
+  useEffect(() => {
+    history.replaceState(null, "", `#${active}`)
+  }, [active])
+
+  useEffect(() => {
+    function onHashChange() {
+      const hash = window.location.hash.slice(1)
+      if (validIds.has(hash)) setActive(hash)
+    }
+    window.addEventListener("hashchange", onHashChange)
+    return () => window.removeEventListener("hashchange", onHashChange)
+  }, [])
 
   return (
     <CorporationsProvider>

@@ -1,47 +1,35 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { Eye, EyeOff, Lock, ShieldCheck, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ApiError, login } from "@/lib/api"
 
 export function AdminLoginForm({ onSuccess }: { onSuccess?: () => void }) {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [autoLogin, setAutoLogin] = useState(false)
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError("")
-
     if (!username.trim() || !password) {
       setError("아이디와 비밀번호를 모두 입력하세요.")
       return
     }
-
     setIsLoading(true)
     try {
-      await login(username.trim(), password)
+      await login(username.trim(), password, autoLogin)
       onSuccess?.()
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message)
-      } else {
-        setError("서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.")
-      }
+      setError(err instanceof ApiError ? err.message : "서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.")
     } finally {
       setIsLoading(false)
     }
@@ -53,74 +41,36 @@ export function AdminLoginForm({ onSuccess }: { onSuccess?: () => void }) {
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
           <ShieldCheck className="h-6 w-6" aria-hidden="true" />
         </div>
-        <CardTitle className="text-2xl font-semibold text-balance">
-          관리자 로그인
-        </CardTitle>
-        <CardDescription className="text-pretty">
-          계속하려면 관리자 아이디와 비밀번호를 입력하세요.
-        </CardDescription>
+        <CardTitle className="text-2xl font-semibold">관리자 로그인</CardTitle>
+        <CardDescription>아이디와 비밀번호를 입력하세요.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
           <div className="flex flex-col gap-2">
             <Label htmlFor="username">아이디</Label>
             <div className="relative">
-              <User
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="아이디를 입력하세요"
-                autoComplete="username"
-                autoFocus
-                aria-invalid={!!error}
-                className="pl-9"
-              />
+              <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <Input id="username" type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="아이디를 입력하세요" autoComplete="username" autoFocus aria-invalid={!!error} className="pl-9" />
             </div>
           </div>
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="password">비밀번호</Label>
             <div className="relative">
-              <Lock
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="비밀번호를 입력하세요"
-                autoComplete="current-password"
-                aria-invalid={!!error}
-                aria-describedby={error ? "login-error" : undefined}
-                className="pl-9 pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 표시"}
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" aria-hidden="true" />
-                ) : (
-                  <Eye className="h-4 w-4" aria-hidden="true" />
-                )}
+              <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <Input id="password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="비밀번호를 입력하세요" autoComplete="current-password" aria-invalid={!!error} aria-describedby={error ? "login-error" : undefined} className="pl-9 pr-10" />
+              <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 표시"}>
+                {showPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
               </button>
             </div>
           </div>
 
-          {error ? (
-            <p id="login-error" role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          ) : null}
+          <label className="flex cursor-pointer select-none items-center gap-2">
+            <input type="checkbox" checked={autoLogin} onChange={(e) => setAutoLogin(e.target.checked)} className="h-4 w-4 rounded border-gray-300 accent-primary" />
+            <span className="text-sm text-muted-foreground">자동 로그인</span>
+          </label>
+
+          {error && <p id="login-error" role="alert" className="text-sm text-destructive">{error}</p>}
 
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? "확인 중..." : "로그인"}
