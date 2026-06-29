@@ -160,12 +160,12 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
       </Button>
 
       <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
-        <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl flex flex-col max-h-[88vh]">
+          <DialogHeader className="shrink-0">
             <DialogTitle className="text-base">엑셀 업로드 — {templateName}</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-1">
+          <div className="flex-1 overflow-y-auto space-y-4 py-1 min-h-0">
             {/* 1단계: 양식 다운로드 */}
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
               <p className="text-xs font-semibold text-primary mb-2">① 양식 다운로드 (필수)</p>
@@ -285,7 +285,7 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
             )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 border-t border-border pt-4">
             <Button variant="outline" onClick={handleClose}>닫기</Button>
             <Button
               onClick={handleUpload}

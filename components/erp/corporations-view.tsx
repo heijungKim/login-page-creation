@@ -206,19 +206,19 @@ export function CorporationsView() {
           <ExcelUploadButton
             templateName="법인"
             columns={[
+              { key: "category", label: "구분", required: true, example: "운영 법인" },
               { key: "name", label: "법인명", required: true, example: "한빛컴퍼니" },
+              { key: "region", label: "지역", example: "서울" },
+              { key: "openDate", label: "개업연월일", example: "2020-01-01" },
               { key: "bizNo", label: "사업자번호", required: true, example: "123-81-45678" },
               { key: "corpNo", label: "법인번호", example: "110111-1234567" },
-              { key: "category", label: "구분", example: "운영법인" },
-              { key: "ceo", label: "대표자", example: "홍길동" },
-              { key: "region", label: "지역", example: "서울" },
-              { key: "openDate", label: "개업일", example: "2020-01-01" },
-              { key: "phone", label: "전화번호", example: "02-1234-5678" },
-              { key: "bizAddress", label: "사업장주소", example: "서울시 강남구" },
-              { key: "bizEmail", label: "이메일", example: "corp@email.com" },
-              { key: "account", label: "계좌정보", example: "국민은행 123-456-789012" },
-              { key: "status", label: "상태", example: "활성" },
-              { key: "note", label: "비고", example: "" },
+              { key: "ceo", label: "법인대표", example: "홍길동" },
+              { key: "auditorDirector", label: "감사/사내이사", example: "김감사" },
+              { key: "birthDate", label: "생년월일", example: "1990-01-01" },
+              { key: "phone", label: "휴대폰번호", example: "010-1234-5678" },
+              { key: "phonePlan", label: "요금제", example: "LTE 데이터 무제한" },
+              { key: "bizAddress", label: "사업 소재지", example: "서울시 강남구 테헤란로 1" },
+              { key: "bizEmail", label: "사업자 메일주소", example: "corp@email.com" },
             ] satisfies ExcelColumn[]}
             onRows={async (rows) => {
               let success = 0
@@ -227,16 +227,24 @@ export function CorporationsView() {
                 const r = rows[i]
                 try {
                   await api.post("/api/corporations", {
-                    name: r.name, bizNo: r.bizNo, corpNo: r.corpNo || "",
-                    category: r.category || "운영법인", ceo: r.ceo || "",
-                    region: r.region || "", openDate: r.openDate || null,
-                    phone: r.phone || "", bizAddress: r.bizAddress || "",
-                    bizEmail: r.bizEmail || "", account: r.account || "",
-                    status: r.status || "활성", note: r.note || "",
-                    progressMemo: "", auditorDirector: "", shareholder: "",
-                    birthDate: null, phonePlan: "", certCorp: "", certPersonal: "",
-                    certExpiry: null, iros: "", irosPw: "", irosUserNo: "",
-                    hometaxId: "", hometaxPw: "",
+                    category: ({ "운영법인": "운영 법인", "운영 법인": "운영 법인", "계약법인": "계약법인(영세)", "계약법인(영세)": "계약법인(영세)", "하위법인": "하위 법인", "하위 법인": "하위 법인", "상품권법인": "상품권 법인", "상품권 법인": "상품권 법인" }[r.category?.trim()] ?? "운영 법인"),
+                    name: r.name,
+                    bizNo: r.bizNo,
+                    corpNo: r.corpNo || "",
+                    ceo: r.ceo || "",
+                    region: r.region || "",
+                    openDate: r.openDate || null,
+                    auditorDirector: r.auditorDirector || "",
+                    birthDate: r.birthDate || "",
+                    phone: (r.phone.match(/[\d]{2,4}[-\s]?\d{3,4}[-\s]?\d{4}/) ?? [""])[0].replace(/\s/g, "-"),
+                    phonePlan: r.phonePlan || "",
+                    bizAddress: r.bizAddress || "",
+                    bizEmail: (r.bizEmail.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/) ?? [""])[0],
+                    status: "활성",
+                    account: "", certCorp: "", iros: "", hometaxId: "", note: "",
+                    shareholder: "",
+                    progressMemo: "", certPersonal: "",
+                    certExpiry: null, irosPw: "", irosUserNo: "", hometaxPw: "",
                   })
                   success++
                 } catch (e) { failed.push({ row: i + 2, reason: e instanceof ApiError ? e.message : "오류" }) }

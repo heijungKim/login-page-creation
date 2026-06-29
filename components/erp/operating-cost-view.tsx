@@ -218,6 +218,7 @@ export function OperatingCostView() {
             { key: "description", label: "적요/항목", example: "사무용품 구매" },
             { key: "inAmount", label: "입금금액", example: "500000" },
             { key: "outAmount", label: "출금금액", example: "" },
+            { key: "note", label: "비고", example: "" },
           ] satisfies ExcelColumn[]}
           onRows={async (rows) => {
             if (activeTab == null) return { success: 0, failed: [{ row: 0, reason: "법인 탭을 먼저 선택해주세요." }] }
@@ -233,7 +234,7 @@ export function OperatingCostView() {
               try {
                 await api.post("/api/operating-costs", {
                   corporationId: activeTab, date: r.date, type,
-                  amount, description: r.description || "", note: "",
+                  amount, description: r.description || "", note: r.note || "",
                 })
                 success++
               } catch (e) { failed.push({ row: i + 2, reason: e instanceof ApiError ? e.message : "오류" }) }
