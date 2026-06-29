@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { Plus, X } from "lucide-react"
+import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -293,9 +294,45 @@ export function AuditRegionView() {
             {loading ? "불러오는 중..." : `전체 ${rows.length}건 · 현재 ${filteredRows.length}건 표시`}
           </p>
         </div>
-        <Button onClick={() => { setSubmitError(null); setForm(emptyForm()); setOpen(true) }} className="gap-1.5">
-          <Plus className="h-4 w-4" />등록
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExcelUploadButton
+            templateName="감사지역"
+            columns={[
+              { key: "name", label: "이름", required: true, example: "홍길동" },
+              { key: "regNo", label: "주민번호", example: "900101-1234567" },
+              { key: "contact", label: "연락처", example: "010-1234-5678" },
+              { key: "email", label: "이메일", example: "test@email.com" },
+              { key: "address", label: "주소", example: "서울시 강남구" },
+              { key: "account", label: "계좌정보", example: "국민은행 123-456-789012" },
+              { key: "bizRegion", label: "지역", example: "서울" },
+              { key: "bizCity", label: "시/구", example: "강남구" },
+              { key: "bizRegDate", label: "사업자등록일", example: "2020-01-01" },
+              { key: "status", label: "상태", example: "활성" },
+              { key: "note", label: "비고", example: "" },
+            ] satisfies ExcelColumn[]}
+            onRows={async (rows) => {
+              let success = 0
+              const failed: Array<{ row: number; reason: string }> = []
+              for (let i = 0; i < rows.length; i++) {
+                const r = rows[i]
+                try {
+                  await api.post("/api/audit-regions", {
+                    name: r.name, regNo: r.regNo || "", contact: r.contact || "",
+                    email: r.email || "", address: r.address || "", account: r.account || "",
+                    bizRegion: r.bizRegion || "", bizCity: r.bizCity || "",
+                    bizRegDate: r.bizRegDate || null, status: r.status || "활성", note: r.note || "",
+                  })
+                  success++
+                } catch (e) { failed.push({ row: i + 2, reason: e instanceof ApiError ? e.message : "오류" }) }
+              }
+              await refresh()
+              return { success, failed }
+            }}
+          />
+          <Button onClick={() => { setSubmitError(null); setForm(emptyForm()); setOpen(true) }} className="gap-1.5">
+            <Plus className="h-4 w-4" />등록
+          </Button>
+        </div>
       </div>
 
       {error && <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">{error}</div>}

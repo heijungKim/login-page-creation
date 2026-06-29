@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { Plus } from "lucide-react"
+import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -262,9 +263,48 @@ export function LeaseView() {
             {loading ? "불러오는 중..." : `전체 ${rows.length}건 · 현재 ${filteredRows.length}건 표시`}
           </p>
         </div>
-        <Button onClick={() => { setSubmitError(null); setOpen(true) }} className="gap-1.5">
-          <Plus className="h-4 w-4" />등록
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExcelUploadButton
+            templateName="임대차"
+            columns={[
+              { key: "category", label: "구분", required: true, example: "운영법인" },
+              { key: "corpName", label: "법인명", required: true, example: "한빛컴퍼니" },
+              { key: "ceoName", label: "대표자명", example: "홍길동" },
+              { key: "location", label: "소재지", required: true, example: "서울시 강남구 테헤란로 123" },
+              { key: "contractStart", label: "계약시작일", example: "2025-01-01" },
+              { key: "contractEnd", label: "계약종료일", example: "2027-12-31" },
+              { key: "deposit", label: "보증금", example: "50000000" },
+              { key: "monthlyRent", label: "월납입금", example: "3200000" },
+              { key: "paymentDay", label: "납입일", example: "5" },
+              { key: "contact", label: "연락처", example: "010-1234-5678" },
+              { key: "sharedOfficeName", label: "공유오피스상호", example: "" },
+              { key: "status", label: "상태", example: "계약중" },
+            ] satisfies ExcelColumn[]}
+            onRows={async (rows) => {
+              let success = 0
+              const failed: Array<{ row: number; reason: string }> = []
+              for (let i = 0; i < rows.length; i++) {
+                const r = rows[i]
+                try {
+                  await api.post("/api/leases", {
+                    category: r.category, corpName: r.corpName, ceoName: r.ceoName || "",
+                    location: r.location, contractStart: r.contractStart || null, contractEnd: r.contractEnd || null,
+                    deposit: Number(r.deposit.replace(/,/g, "")) || 0,
+                    monthlyRent: Number(r.monthlyRent.replace(/,/g, "")) || 0,
+                    paymentDay: r.paymentDay || "", contact: r.contact || "",
+                    sharedOfficeName: r.sharedOfficeName || "", status: r.status || "계약중",
+                  })
+                  success++
+                } catch (e) { failed.push({ row: i + 2, reason: e instanceof ApiError ? e.message : "오류" }) }
+              }
+              await refresh()
+              return { success, failed }
+            }}
+          />
+          <Button onClick={() => { setSubmitError(null); setOpen(true) }} className="gap-1.5">
+            <Plus className="h-4 w-4" />등록
+          </Button>
+        </div>
       </div>
 
       {error ? (

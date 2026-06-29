@@ -2,6 +2,8 @@
 
 import React, { useMemo, useState } from "react"
 import { MessageSquareText, Plus, Trash2 } from "lucide-react"
+import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
+import { api, ApiError } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -95,7 +97,7 @@ const columns: Column[] = [
 ]
 
 export function CorporationsView() {
-  const { rows, loading, error, createCorporation, updateCorporation, removeCorporation } = useCorporations()
+  const { rows, loading, error, refresh, createCorporation, updateCorporation, removeCorporation } = useCorporations()
   const [open, setOpen] = useState(false)
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [detail, setDetail] = useState<Corporation | null>(null)
@@ -200,10 +202,54 @@ export function CorporationsView() {
             {loading ? "불러오는 중..." : `전체 ${activeRows.length}개 법인 · 현재 ${filteredRows.length}개 표시`}
           </p>
         </div>
-        <Button onClick={() => setOpen(true)} className="gap-1.5" disabled={submitting}>
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          법인 등록
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExcelUploadButton
+            templateName="법인"
+            columns={[
+              { key: "name", label: "법인명", required: true, example: "한빛컴퍼니" },
+              { key: "bizNo", label: "사업자번호", required: true, example: "123-81-45678" },
+              { key: "corpNo", label: "법인번호", example: "110111-1234567" },
+              { key: "category", label: "구분", example: "운영법인" },
+              { key: "ceo", label: "대표자", example: "홍길동" },
+              { key: "region", label: "지역", example: "서울" },
+              { key: "openDate", label: "개업일", example: "2020-01-01" },
+              { key: "phone", label: "전화번호", example: "02-1234-5678" },
+              { key: "bizAddress", label: "사업장주소", example: "서울시 강남구" },
+              { key: "bizEmail", label: "이메일", example: "corp@email.com" },
+              { key: "account", label: "계좌정보", example: "국민은행 123-456-789012" },
+              { key: "status", label: "상태", example: "활성" },
+              { key: "note", label: "비고", example: "" },
+            ] satisfies ExcelColumn[]}
+            onRows={async (rows) => {
+              let success = 0
+              const failed: Array<{ row: number; reason: string }> = []
+              for (let i = 0; i < rows.length; i++) {
+                const r = rows[i]
+                try {
+                  await api.post("/api/corporations", {
+                    name: r.name, bizNo: r.bizNo, corpNo: r.corpNo || "",
+                    category: r.category || "운영법인", ceo: r.ceo || "",
+                    region: r.region || "", openDate: r.openDate || null,
+                    phone: r.phone || "", bizAddress: r.bizAddress || "",
+                    bizEmail: r.bizEmail || "", account: r.account || "",
+                    status: r.status || "활성", note: r.note || "",
+                    progressMemo: "", auditorDirector: "", shareholder: "",
+                    birthDate: null, phonePlan: "", certCorp: "", certPersonal: "",
+                    certExpiry: null, iros: "", irosPw: "", irosUserNo: "",
+                    hometaxId: "", hometaxPw: "",
+                  })
+                  success++
+                } catch (e) { failed.push({ row: i + 2, reason: e instanceof ApiError ? e.message : "오류" }) }
+              }
+              await refresh()
+              return { success, failed }
+            }}
+          />
+          <Button onClick={() => setOpen(true)} className="gap-1.5" disabled={submitting}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            법인 등록
+          </Button>
+        </div>
       </div>
 
       {error ? (

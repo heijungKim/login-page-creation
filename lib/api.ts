@@ -21,10 +21,16 @@ export type ApiFetchOptions = Omit<RequestInit, "body"> & {
   body?: unknown
   auth?: boolean
   parseJson?: boolean
+  suppressUnauthorized?: boolean
 }
 
 type UnauthorizedListener = () => void
 const unauthorizedListeners = new Set<UnauthorizedListener>()
+let unauthorizedSuppressed = false
+
+export function suppressUnauthorizedRedirect(suppress: boolean) {
+  unauthorizedSuppressed = suppress
+}
 
 export function onUnauthorized(listener: UnauthorizedListener): () => void {
   unauthorizedListeners.add(listener)
@@ -39,6 +45,7 @@ export async function apiFetch<T = unknown>(
     body,
     auth = true,
     parseJson = true,
+    suppressUnauthorized = false,
     headers,
     method = body !== undefined ? "POST" : "GET",
     ...rest
@@ -70,7 +77,7 @@ export async function apiFetch<T = unknown>(
           : JSON.stringify(body),
   })
 
-  if (res.status === 401) {
+  if (res.status === 401 && !suppressUnauthorized && !unauthorizedSuppressed) {
     clearAccessToken()
     unauthorizedListeners.forEach((fn) => fn())
   }

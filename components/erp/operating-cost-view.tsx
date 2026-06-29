@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { Plus } from "lucide-react"
+import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -205,9 +206,42 @@ export function OperatingCostView() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-0.5">
-        <h2 className="text-xl font-semibold tracking-tight text-foreground">운영비 관리</h2>
-        <p className="text-sm text-muted-foreground">법인별 입출금 내역을 관리합니다.</p>
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-0.5">
+          <h2 className="text-xl font-semibold tracking-tight text-foreground">운영비 관리</h2>
+          <p className="text-sm text-muted-foreground">법인별 입출금 내역을 관리합니다.</p>
+        </div>
+        <ExcelUploadButton
+          templateName="운영비"
+          columns={[
+            { key: "date", label: "날짜", required: true, example: "2025-01-15" },
+            { key: "description", label: "적요/항목", example: "사무용품 구매" },
+            { key: "inAmount", label: "입금금액", example: "500000" },
+            { key: "outAmount", label: "출금금액", example: "" },
+          ] satisfies ExcelColumn[]}
+          onRows={async (rows) => {
+            if (activeTab == null) return { success: 0, failed: [{ row: 0, reason: "법인 탭을 먼저 선택해주세요." }] }
+            let success = 0
+            const failed: Array<{ row: number; reason: string }> = []
+            for (let i = 0; i < rows.length; i++) {
+              const r = rows[i]
+              const inAmt = Number(String(r.inAmount).replace(/,/g, "")) || 0
+              const outAmt = Number(String(r.outAmount).replace(/,/g, "")) || 0
+              if (inAmt === 0 && outAmt === 0) { failed.push({ row: i + 2, reason: "입금금액 또는 출금금액을 입력해주세요." }); continue }
+              const type: TxType = outAmt > 0 ? "출금" : "입금"
+              const amount = outAmt > 0 ? outAmt : inAmt
+              try {
+                await api.post("/api/operating-costs", {
+                  corporationId: activeTab, date: r.date, type,
+                  amount, description: r.description || "", note: "",
+                })
+                success++
+              } catch (e) { failed.push({ row: i + 2, reason: e instanceof ApiError ? e.message : "오류" }) }
+            }
+            await refresh(activeTab, appliedFrom, appliedTo)
+            return { success, failed }
+          }}
+        />
       </div>
 
       {error ? (

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Plus, Trash2 } from "lucide-react"
+import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -360,10 +361,47 @@ export function FixedCostView() {
             {loading ? "불러오는 중..." : `전체 ${rows.length}건 · 현재 ${filteredRows.length}건 표시`}
           </p>
         </div>
-        <Button onClick={() => setOpen(true)} className="gap-1.5">
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          비용 등록
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExcelUploadButton
+            templateName="고정비용"
+            columns={[
+              { key: "category", label: "구분", required: true, example: "임대료" },
+              { key: "item", label: "비용항목", required: true, example: "사무실 임대료" },
+              { key: "amount", label: "금액", required: true, example: "3200000" },
+              { key: "cycle", label: "지급주기", example: "매월" },
+              { key: "payDay", label: "지급일", example: "5" },
+              { key: "payType", label: "지급타입", example: "후불" },
+              { key: "bankName", label: "은행명", example: "국민은행" },
+              { key: "accountNo", label: "계좌번호", example: "123-456-789012" },
+              { key: "accountHolder", label: "예금주", example: "홍길동" },
+              { key: "memo", label: "메모", example: "" },
+            ] satisfies ExcelColumn[]}
+            onRows={async (rows) => {
+              let success = 0
+              const failed: Array<{ row: number; reason: string }> = []
+              for (let i = 0; i < rows.length; i++) {
+                const r = rows[i]
+                try {
+                  await api.post("/api/fixed-costs", {
+                    category: r.category, item: r.item,
+                    amount: Number(r.amount.replace(/,/g, "")) || 0,
+                    cycle: r.cycle || "매월", payDay: r.payDay || "",
+                    payType: r.payType || "후불",
+                    bankName: r.bankName || "", accountNo: r.accountNo || "", accountHolder: r.accountHolder || "",
+                    memo: r.memo || "",
+                  })
+                  success++
+                } catch (e) { failed.push({ row: i + 2, reason: e instanceof ApiError ? e.message : "오류" }) }
+              }
+              await refresh()
+              return { success, failed }
+            }}
+          />
+          <Button onClick={() => setOpen(true)} className="gap-1.5">
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            비용 등록
+          </Button>
+        </div>
       </div>
 
       {error ? (

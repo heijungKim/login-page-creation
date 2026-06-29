@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { Plus, Pencil, Trash2, ShieldCheck, ShieldOff, Eye, EyeOff, KeyRound } from "lucide-react"
+import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -202,10 +203,34 @@ export function UserManagementView() {
           <h2 className="text-lg font-semibold">사용자 관리</h2>
           <p className="text-sm text-muted-foreground">시스템 관리자 계정을 등록하고 관리합니다.</p>
         </div>
-        <Button size="sm" onClick={() => { setShowAdd(true); setAddForm(emptyForm); setAddError("") }}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          사용자 등록
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExcelUploadButton
+            templateName="사용자"
+            columns={[
+              { key: "username", label: "아이디", required: true, example: "user01" },
+              { key: "displayName", label: "이름", required: true, example: "홍길동" },
+              { key: "contact", label: "연락처", example: "010-1234-5678" },
+              { key: "password", label: "초기비밀번호", required: true, example: "pass1234" },
+            ] satisfies ExcelColumn[]}
+            onRows={async (rows) => {
+              let success = 0
+              const failed: Array<{ row: number; reason: string }> = []
+              for (let i = 0; i < rows.length; i++) {
+                const r = rows[i]
+                try {
+                  await api.post("/api/admins", { username: r.username, displayName: r.displayName, contact: r.contact || "", password: r.password })
+                  success++
+                } catch (e) { failed.push({ row: i + 2, reason: e instanceof ApiError ? e.message : "오류" }) }
+              }
+              await load()
+              return { success, failed }
+            }}
+          />
+          <Button size="sm" onClick={() => { setShowAdd(true); setAddForm(emptyForm); setAddError("") }}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            사용자 등록
+          </Button>
+        </div>
       </div>
 
       {loading ? (

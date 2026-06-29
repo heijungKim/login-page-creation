@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
+import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -533,10 +534,46 @@ export function BusinessIncomeView() {
             {loading ? "불러오는 중..." : `전체 ${rows.length}건 · 표시 ${filteredRows.length}건`}
           </p>
         </div>
-        <Button onClick={() => { setSubmitError(null); setOpen(true) }} className="gap-2 h-9">
-          <Plus className="h-4 w-4" />
-          소득 등록
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExcelUploadButton
+            templateName="사업소득"
+            columns={[
+              { key: "name", label: "소득자명", required: true, example: "홍길동" },
+              { key: "regNo", label: "주민번호", required: true, example: "900101-1234567" },
+              { key: "phone", label: "전화번호", example: "010-1234-5678" },
+              { key: "account", label: "계좌번호", example: "국민은행 123-456-789012" },
+              { key: "address", label: "주소", example: "서울시 강남구" },
+              { key: "revenue", label: "총매출액", example: "10000000" },
+              { key: "commission", label: "수수료율(%)", example: "30" },
+              { key: "reportType", label: "신고여부", example: "미신고" },
+              { key: "memo", label: "메모", example: "" },
+            ] satisfies ExcelColumn[]}
+            onRows={async (rows) => {
+              let success = 0
+              const failed: Array<{ row: number; reason: string }> = []
+              for (let i = 0; i < rows.length; i++) {
+                const r = rows[i]
+                try {
+                  await api.post("/api/business-incomes", {
+                    name: r.name, regNo: r.regNo, phone: r.phone,
+                    account: r.account, address: r.address,
+                    revenue: Number(r.revenue.replace(/,/g, "")) || 0,
+                    commission: parseFloat(r["수수료율(%)"] || r.commission) || 0,
+                    reportType: r.reportType || "미신고",
+                    memo: r.memo,
+                  })
+                  success++
+                } catch (e) { failed.push({ row: i + 2, reason: e instanceof ApiError ? e.message : "오류" }) }
+              }
+              await refresh()
+              return { success, failed }
+            }}
+          />
+          <Button onClick={() => { setSubmitError(null); setOpen(true) }} className="gap-2 h-9">
+            <Plus className="h-4 w-4" />
+            소득 등록
+          </Button>
+        </div>
       </div>
 
       {error && (

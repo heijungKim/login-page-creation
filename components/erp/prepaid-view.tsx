@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { Plus, Pencil, Check, X, Trash2 } from "lucide-react"
+import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -312,10 +313,41 @@ export function PrepaidView() {
             {loading ? "불러오는 중..." : `전체 ${summaries.length}명 · 현재 ${filteredSummaries.length}명 표시`}
           </p>
         </div>
-        <Button onClick={() => { setForm(emptyForm); setOpen(true); setSubmitError(null) }} className="gap-1.5">
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          선지급 등록
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExcelUploadButton
+            templateName="선지급"
+            columns={[
+              { key: "name", label: "이름", required: true, example: "홍길동" },
+              { key: "residentNo", label: "주민번호", example: "900101-1234567" },
+              { key: "phone", label: "연락처", example: "010-1234-5678" },
+              { key: "amount", label: "선지급금액", required: true, example: "5000000" },
+              { key: "payDate", label: "선지급일자", required: true, example: "2025-01-15" },
+              { key: "status", label: "상태", example: "진행중" },
+              { key: "memo", label: "메모", example: "" },
+            ] satisfies ExcelColumn[]}
+            onRows={async (rows) => {
+              let success = 0
+              const failed: Array<{ row: number; reason: string }> = []
+              for (let i = 0; i < rows.length; i++) {
+                const r = rows[i]
+                try {
+                  await api.post("/api/prepaid", {
+                    name: r.name, residentNo: r.residentNo || "", phone: r.phone || "",
+                    amount: Number(r.amount.replace(/,/g, "")) || 0,
+                    payDate: r.payDate, status: r.status || "진행중", memo: r.memo || "",
+                  })
+                  success++
+                } catch (e) { failed.push({ row: i + 2, reason: e instanceof ApiError ? e.message : "오류" }) }
+              }
+              await refresh()
+              return { success, failed }
+            }}
+          />
+          <Button onClick={() => { setForm(emptyForm); setOpen(true); setSubmitError(null) }} className="gap-1.5">
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            선지급 등록
+          </Button>
+        </div>
       </div>
 
       {error ? (

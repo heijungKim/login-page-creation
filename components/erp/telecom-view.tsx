@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Plus, Trash2 } from "lucide-react"
+import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -337,10 +338,44 @@ export function TelecomView() {
             {loading ? "불러오는 중..." : `전체 ${rows.length}건 · 현재 ${filteredRows.length}건 표시`}
           </p>
         </div>
-        <Button onClick={() => setOpen(true)} className="gap-1.5">
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          통신비 등록
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExcelUploadButton
+            templateName="통신비"
+            columns={[
+              { key: "owner", label: "명의자", required: true, example: "홍길동" },
+              { key: "phone", label: "연락처", example: "010-1234-5678" },
+              { key: "carrier", label: "통신사", required: true, example: "SKT" },
+              { key: "cost", label: "통신비용", required: true, example: "55000" },
+              { key: "paymentDay", label: "납부일", example: "15" },
+              { key: "bankName", label: "은행명", example: "국민은행" },
+              { key: "accountNo", label: "계좌번호", example: "123-456-789012" },
+              { key: "memo", label: "비고", example: "" },
+            ] satisfies ExcelColumn[]}
+            onRows={async (rows) => {
+              let success = 0
+              const failed: Array<{ row: number; reason: string }> = []
+              for (let i = 0; i < rows.length; i++) {
+                const r = rows[i]
+                try {
+                  await api.post("/api/telecoms", {
+                    owner: r.owner, phone: r.phone || "", carrier: r.carrier,
+                    cost: Number(r.cost.replace(/,/g, "")) || 0,
+                    paymentDay: r.paymentDay || "",
+                    bankName: r.bankName || "", accountNo: r.accountNo || "",
+                    memo: r.memo || "",
+                  })
+                  success++
+                } catch (e) { failed.push({ row: i + 2, reason: e instanceof ApiError ? e.message : "오류" }) }
+              }
+              await refresh()
+              return { success, failed }
+            }}
+          />
+          <Button onClick={() => setOpen(true)} className="gap-1.5">
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            통신비 등록
+          </Button>
+        </div>
       </div>
 
       {error ? (

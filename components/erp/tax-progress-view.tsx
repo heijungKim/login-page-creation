@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { Plus, Pencil, Trash2 } from "lucide-react"
+import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -228,9 +229,38 @@ export function TaxProgressView() {
             {loading ? "불러오는 중..." : `전체 ${rows.length}건`}
           </p>
         </div>
-        <Button size="sm" onClick={() => { setShowAdd(true); setAddForm(emptyForm); setAddError("") }}>
-          <Plus className="mr-1.5 h-4 w-4" />항목 등록
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExcelUploadButton
+            templateName="세무진행현황"
+            columns={[
+              { key: "corpName", label: "법인명", required: true, example: "한빛컴퍼니" },
+              { key: "task", label: "신고업무", required: true, example: "부가가치세 신고" },
+              { key: "dueDate", label: "신고기한", required: true, example: "2025-01-25" },
+              { key: "manager", label: "담당자", example: "홍길동" },
+              { key: "status", label: "진행상태", example: "대기" },
+              { key: "memo", label: "메모", example: "" },
+            ] satisfies ExcelColumn[]}
+            onRows={async (rows) => {
+              let success = 0
+              const failed: Array<{ row: number; reason: string }> = []
+              for (let i = 0; i < rows.length; i++) {
+                const r = rows[i]
+                try {
+                  await api.post("/api/tax-progress", {
+                    corpName: r.corpName, task: r.task, dueDate: r.dueDate,
+                    manager: r.manager || "", status: r.status || "대기", memo: r.memo || "",
+                  })
+                  success++
+                } catch (e) { failed.push({ row: i + 2, reason: e instanceof ApiError ? e.message : "오류" }) }
+              }
+              await load()
+              return { success, failed }
+            }}
+          />
+          <Button size="sm" onClick={() => { setShowAdd(true); setAddForm(emptyForm); setAddError("") }}>
+            <Plus className="mr-1.5 h-4 w-4" />항목 등록
+          </Button>
+        </div>
       </div>
 
       {error && (
