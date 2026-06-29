@@ -143,23 +143,6 @@ const views: Record<string, ViewConfig> = {
       { corp: "대성홀딩스", address: "서울 영등포구 여의대로 7", deposit: "₩80,000,000", rent: "₩4,100,000", expiry: "2028-05-31", status: "계약중" },
     ],
   },
-  "fixed-expense": {
-    title: "고정지출",
-    statusKey: "status",
-    columns: [
-      { key: "corp", label: "법인명" },
-      { key: "item", label: "지출 항목" },
-      { key: "amount", label: "금액" },
-      { key: "date", label: "지출일" },
-      { key: "status", label: "처리상태" },
-    ],
-    rows: [
-      { corp: "한빛컴퍼니", item: "4대보험료", amount: "₩2,850,000", date: "매월 10일", status: "정상" },
-      { corp: "대성홀딩스", item: "대출 이자", amount: "₩1,420,000", date: "매월 25일", status: "정상" },
-      { corp: "정우산업", item: "전기/수도료", amount: "₩3,100,000", date: "매월 말일", status: "진행중" },
-      { corp: "미래파트너스", item: "통신비", amount: "₩280,000", date: "매월 18일", status: "정상" },
-    ],
-  },
   "operating-cost": {
     title: "운영비 관리",
     columns: [
@@ -174,24 +157,6 @@ const views: Record<string, ViewConfig> = {
       { corp: "대성홀딩스", category: "접대비", budget: "₩3,000,000", spent: "₩2,750,000", rate: "92%" },
       { corp: "정우산업", category: "소모품비", budget: "₩2,000,000", spent: "₩900,000", rate: "45%" },
       { corp: "미래파트너스", category: "교육훈련비", budget: "₩1,500,000", spent: "₩1,500,000", rate: "100%" },
-    ],
-  },
-  "tax-progress": {
-    title: "월 세무 진행현황",
-    statusKey: "status",
-    columns: [
-      { key: "corp", label: "법인명" },
-      { key: "task", label: "신고 업무" },
-      { key: "due", label: "신고기한" },
-      { key: "manager", label: "담당자" },
-      { key: "status", label: "진행상태" },
-    ],
-    rows: [
-      { corp: "한빛컴퍼니", task: "부가세 신고", due: "2026-06-25", manager: "김세무", status: "진행중" },
-      { corp: "대성홀딩스", task: "원천세 신고", due: "2026-06-10", manager: "이세무", status: "완료" },
-      { corp: "미래파트너스", task: "법인세 중간예납", due: "2026-06-30", manager: "박세무", status: "대기" },
-      { corp: "정우산업", task: "4대보험 정산", due: "2026-06-15", manager: "정세무", status: "진행중" },
-      { corp: "세진무역", task: "부가세 신고", due: "2026-06-25", manager: "최세무", status: "지연" },
     ],
   },
 }

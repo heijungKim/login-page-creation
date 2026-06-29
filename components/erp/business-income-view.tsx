@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { Plus, Pencil, Trash2 } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -82,6 +82,92 @@ const getTodayDate = () => new Date().toISOString().slice(0, 10)
 const emptyForm: FormData = {
   name: "", regNo: "", address: "", phone: "",
   account: "", revenue: "", commission: "", payment: "", memo: "", reportType: "미신고", payDate: getTodayDate(),
+}
+
+function MonthPicker({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  const [open, setOpen] = useState(false)
+  const [viewYear, setViewYear] = useState(() => value ? parseInt(value.slice(0, 4)) : new Date().getFullYear())
+  const ref = useRef<HTMLDivElement>(null)
+
+  const selYear = value ? parseInt(value.slice(0, 4)) : null
+  const selMonth = value ? parseInt(value.slice(5, 7)) : null
+
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", onDown)
+    return () => document.removeEventListener("mousedown", onDown)
+  }, [])
+
+  function select(m: number) {
+    onChange(`${viewYear}-${String(m).padStart(2, "0")}`)
+    setOpen(false)
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "h-9 min-w-[130px] rounded-lg border-2 px-4 text-sm font-semibold transition-all text-center shadow-sm",
+          open
+            ? "border-primary ring-2 ring-primary/20 bg-background text-primary"
+            : value
+              ? "border-primary bg-primary/5 text-primary hover:bg-primary/10"
+              : "border-input bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground"
+        )}
+      >
+        {value ? `${selYear}년 ${selMonth}월` : placeholder}
+      </button>
+
+      {open && (
+        <div className="absolute top-[calc(100%+4px)] left-0 z-50 w-[196px] rounded-xl border border-border bg-popover shadow-lg p-3">
+          {/* 연도 네비 */}
+          <div className="flex items-center justify-between mb-2.5">
+            <button type="button" onClick={() => setViewYear((y) => y - 1)} className="h-7 w-7 rounded-md flex items-center justify-center hover:bg-muted transition-colors">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="text-xs font-semibold">{viewYear}년</span>
+            <button type="button" onClick={() => setViewYear((y) => y + 1)} className="h-7 w-7 rounded-md flex items-center justify-center hover:bg-muted transition-colors">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+          {/* 월 버튼 그리드 */}
+          <div className="grid grid-cols-3 gap-1">
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => {
+              const isSelected = selYear === viewYear && selMonth === m
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => select(m)}
+                  className={cn(
+                    "rounded-md py-1.5 text-xs font-medium transition-colors",
+                    isSelected
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-muted text-foreground"
+                  )}
+                >
+                  {m}월
+                </button>
+              )
+            })}
+          </div>
+          {value && (
+            <button
+              type="button"
+              onClick={() => { onChange(""); setOpen(false) }}
+              className="mt-2 w-full rounded-md py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              선택 해제
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function ReportBadge({ type }: { type: string }) {
@@ -205,6 +291,11 @@ export function BusinessIncomeView() {
   const [editMode, setEditMode] = useState(false)
   const [form, setForm] = useState<FormData>(emptyForm)
   const [filters, setFilters] = useState<Record<string, string>>({})
+  const [paymentFrom, setPaymentFrom] = useState<string>("")
+  const [paymentTo, setPaymentTo] = useState<string>("")
+  const [paymentPage, setPaymentPage] = useState(0)
+
+  const PAYMENT_PAGE_SIZE = 10
   const [submitting, setSubmitting] = useState(false)
 
   const set = (k: keyof FormData, v: string) => setForm((f) => ({ ...f, [k]: v }))
@@ -295,6 +386,9 @@ export function BusinessIncomeView() {
     setEditingPaymentId(null)
     setEditMode(false)
     setSubmitError(null)
+    setPaymentFrom("")
+    setPaymentTo("")
+    setPaymentPage(0)
   }
 
   async function handleSaveDetail() {
@@ -400,6 +494,24 @@ export function BusinessIncomeView() {
       setSubmitting(false)
     }
   }
+
+  const filteredPayments = useMemo(() => {
+    if (!detail) return []
+    return detail.payments.filter((p) => {
+      const ym = p.payDate.slice(0, 7)
+      if (paymentFrom && ym < paymentFrom) return false
+      if (paymentTo && ym > paymentTo) return false
+      return true
+    })
+  }, [detail, paymentFrom, paymentTo])
+
+  const paymentTotalPages = Math.max(1, Math.ceil(filteredPayments.length / PAYMENT_PAGE_SIZE))
+  const pagedPayments = filteredPayments.slice(paymentPage * PAYMENT_PAGE_SIZE, (paymentPage + 1) * PAYMENT_PAGE_SIZE)
+
+  const filteredPaymentTotals = useMemo(() => filteredPayments.reduce(
+    (acc, p) => ({ payment: acc.payment + p.amount, incomeTax: acc.incomeTax + p.incomeTax, localTax: acc.localTax + p.localTax, actual: acc.actual + (p.amount - p.incomeTax - p.localTax) }),
+    { payment: 0, incomeTax: 0, localTax: 0, actual: 0 }
+  ), [filteredPayments])
 
   const formRevenue = Number(form.revenue.replace(/,/g, "")) || 0
   const formCommissionRate = parseFloat(form.commission) || 0
@@ -538,7 +650,7 @@ export function BusinessIncomeView() {
 
       {/* 상세 팝업 */}
       <Dialog open={!!detail} onOpenChange={(o) => { if (!o) { setDetail(null); setEditMode(false); setEditingPaymentId(null); setSubmitError(null) } }}>
-        <DialogContent className="!w-[78vw] !max-w-[78vw] max-h-[92vh] overflow-y-auto p-0">
+        <DialogContent className="!w-[78vw] !max-w-[78vw] max-h-[92vh] overflow-x-hidden overflow-y-auto p-0">
           <DialogHeader className="px-6 pt-5 pb-4 border-b border-border bg-muted/30">
             <div className="flex items-start justify-between">
               <div>
@@ -547,15 +659,6 @@ export function BusinessIncomeView() {
               </div>
               <div className="flex items-center gap-2 mt-0.5">
                 {detail && <ReportBadge type={detail.reportType} />}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-                  onClick={handleDeleteIncome}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  삭제
-                </Button>
               </div>
             </div>
           </DialogHeader>
@@ -634,8 +737,30 @@ export function BusinessIncomeView() {
 
               {/* 지급 내역 */}
               <div className="rounded-xl border border-border bg-card">
-                <div className="px-4 py-3 border-b border-border/60">
-                  <p className="text-sm font-semibold text-foreground">지급 내역 <span className="ml-1.5 text-xs font-normal text-muted-foreground">{detail.payments.length}건</span></p>
+                <div className="border-b border-border/60">
+                  {/* 타이틀 */}
+                  <div className="flex items-center justify-between px-4 pt-3 pb-2">
+                    <p className="text-sm font-semibold text-foreground">
+                      지급 내역
+                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                        {(paymentFrom || paymentTo) ? `${filteredPayments.length}건` : `전체 ${detail.payments.length}건`}
+                      </span>
+                    </p>
+                    {(paymentFrom || paymentTo) && (
+                      <button
+                        onClick={() => { setPaymentFrom(""); setPaymentTo(""); setPaymentPage(0) }}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+                      >
+                        초기화
+                      </button>
+                    )}
+                  </div>
+                  {/* 월 범위 검색 - 가운데 강조 */}
+                  <div className="flex items-center justify-center gap-3 bg-muted/30 px-4 py-2.5">
+                    <MonthPicker value={paymentFrom} onChange={(v) => { setPaymentFrom(v); setPaymentPage(0) }} placeholder="시작월 선택" />
+                    <span className="text-sm font-semibold text-muted-foreground">~</span>
+                    <MonthPicker value={paymentTo} onChange={(v) => { setPaymentTo(v); setPaymentPage(0) }} placeholder="종료월 선택" />
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -656,7 +781,7 @@ export function BusinessIncomeView() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/40">
-                      {detail.payments.map((item, idx) => {
+                      {pagedPayments.map((item, idx) => {
                         const withholding = item.incomeTax + item.localTax
                         const actualIncome = item.amount - withholding
                         const isEditing = editingPaymentId === item.id
@@ -726,29 +851,71 @@ export function BusinessIncomeView() {
                           </tr>
                         )
                       })}
-                      {detail.payments.length === 0 && (
+                      {filteredPayments.length === 0 && (
                         <tr>
-                          <td colSpan={11} className="py-10 text-center text-sm text-muted-foreground">등록된 지급 내역이 없습니다.</td>
+                          <td colSpan={11} className="py-10 text-center text-sm text-muted-foreground">
+                            {(paymentFrom || paymentTo) ? "해당 기간의 지급 내역이 없습니다." : "등록된 지급 내역이 없습니다."}
+                          </td>
                         </tr>
                       )}
                     </tbody>
                     <tfoot>
                       <tr className="border-t-2 border-border bg-muted/40 font-semibold text-sm">
-                        <td className="px-3 pt-3 pb-2.5">합계</td>
+                        <td className="px-3 pt-3 pb-2.5">{(paymentFrom || paymentTo) ? "기간 합계" : "합계"}</td>
                         <td className="px-3 pt-3 pb-2.5 text-center text-muted-foreground">-</td>
                         <td className="px-3 pt-3 pb-2.5 text-center text-muted-foreground">-</td>
-                        <td className="px-3 pt-3 pb-2.5 text-right tabular-nums">{fmt(detail.payment)}</td>
+                        <td className="px-3 pt-3 pb-2.5 text-right tabular-nums">{fmt(filteredPaymentTotals.payment)}</td>
                         <td className="px-3 pt-3 pb-2.5 text-center text-muted-foreground">-</td>
-                        <td className="px-3 pt-3 pb-2.5 text-right tabular-nums text-orange-600">{fmt(detail.totalIncomeTax)}</td>
-                        <td className="px-3 pt-3 pb-2.5 text-right tabular-nums text-orange-600">{fmt(detail.totalLocalTax)}</td>
-                        <td className="px-3 pt-3 pb-2.5 text-right tabular-nums text-red-600">{fmt(detail.totalIncomeTax + detail.totalLocalTax)}</td>
-                        <td className="px-3 pt-3 pb-2.5 text-right tabular-nums text-blue-700 font-bold">{fmt(detail.actualPayment)}</td>
+                        <td className="px-3 pt-3 pb-2.5 text-right tabular-nums text-orange-600">{fmt(filteredPaymentTotals.incomeTax)}</td>
+                        <td className="px-3 pt-3 pb-2.5 text-right tabular-nums text-orange-600">{fmt(filteredPaymentTotals.localTax)}</td>
+                        <td className="px-3 pt-3 pb-2.5 text-right tabular-nums text-red-600">{fmt(filteredPaymentTotals.incomeTax + filteredPaymentTotals.localTax)}</td>
+                        <td className="px-3 pt-3 pb-2.5 text-right tabular-nums text-blue-700 font-bold">{fmt(filteredPaymentTotals.actual)}</td>
                         <td className="px-3 pt-3 pb-2.5 text-xs text-muted-foreground">실 지급액</td>
                         <td />
                       </tr>
                     </tfoot>
                   </table>
                 </div>
+
+                {/* 페이지네이션 */}
+                {paymentTotalPages > 1 && (
+                  <div className="flex items-center justify-between border-t border-border/60 px-4 py-2.5 bg-muted/10">
+                    <span className="text-xs text-muted-foreground">
+                      {paymentPage + 1} / {paymentTotalPages} 페이지
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={paymentPage === 0}
+                        onClick={() => setPaymentPage((p) => p - 1)}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      {Array.from({ length: paymentTotalPages }, (_, i) => (
+                        <Button
+                          key={i}
+                          variant={i === paymentPage ? "default" : "ghost"}
+                          size="sm"
+                          className="h-7 w-7 p-0 text-xs"
+                          onClick={() => setPaymentPage(i)}
+                        >
+                          {i + 1}
+                        </Button>
+                      ))}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={paymentPage === paymentTotalPages - 1}
+                        onClick={() => setPaymentPage((p) => p + 1)}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {/* 지급 내역 추가 */}
                 <div className="border-t border-border/60 bg-muted/20 px-4 py-4">
@@ -791,7 +958,16 @@ export function BusinessIncomeView() {
             </div>
           )}
 
-          <DialogFooter className="px-6 py-4 border-t border-border bg-muted/20">
+          <DialogFooter className="px-6 py-4 border-t border-border bg-muted/20 flex items-center justify-between">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+              onClick={handleDeleteIncome}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              삭제
+            </Button>
             <Button variant="outline" onClick={() => { setDetail(null); setEditMode(false); setEditingPaymentId(null) }}>닫기</Button>
           </DialogFooter>
         </DialogContent>

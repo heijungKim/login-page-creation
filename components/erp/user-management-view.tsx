@@ -14,6 +14,7 @@ type AdminUser = {
   id: number
   username: string
   displayName: string
+  contact: string
   enabled: boolean
   createdAt: string
 }
@@ -29,7 +30,24 @@ function getCurrentAdminId(): number | null {
   }
 }
 
-const emptyForm = { username: "", displayName: "", password: "", passwordConfirm: "" }
+function formatPhone(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11)
+  if (digits.startsWith("02")) {
+    if (digits.length <= 2) return digits
+    if (digits.length <= 5) return `${digits.slice(0, 2)}-${digits.slice(2)}`
+    if (digits.length <= 9) return `${digits.slice(0, 2)}-${digits.slice(2, 5)}-${digits.slice(5)}`
+    return `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6, 10)}`
+  }
+  if (digits.length <= 3) return digits
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`
+  if (digits.length <= 10) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7, 11)}`
+}
+
+const emptyForm = { username: "", displayName: "", contact: "", password: "", passwordConfirm: "" }
+
+// 사이드바(w-60 = 15rem)를 고려한 팝업 중앙 정렬 클래스
+const DIALOG_CENTER = "left-[calc(50%+7.5rem)]"
 
 export function UserManagementView() {
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -51,7 +69,7 @@ export function UserManagementView() {
   const [showResetPwConfirm, setShowResetPwConfirm] = useState(false)
 
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null)
-  const [editForm, setEditForm] = useState({ displayName: "", password: "" })
+  const [editForm, setEditForm] = useState({ displayName: "", contact: "", password: "" })
   const [editError, setEditError] = useState("")
   const [editLoading, setEditLoading] = useState(false)
   const [showEditPw, setShowEditPw] = useState(false)
@@ -88,6 +106,7 @@ export function UserManagementView() {
       const created = await api.post<AdminUser>("/api/admins", {
         username: addForm.username.trim(),
         displayName: addForm.displayName.trim(),
+        contact: addForm.contact,
         password: addForm.password,
       })
       setUsers((prev) => [...prev, created])
@@ -112,6 +131,7 @@ export function UserManagementView() {
     try {
       await api.put(`/api/admins/${resetTarget.id}`, {
         displayName: resetTarget.displayName,
+        contact: resetTarget.contact,
         password: resetForm.password,
       })
       setResetTarget(null)
@@ -130,6 +150,7 @@ export function UserManagementView() {
     try {
       const updated = await api.put<AdminUser>(`/api/admins/${editTarget.id}`, {
         displayName: editForm.displayName.trim(),
+        contact: editForm.contact,
         password: editForm.password || null,
       })
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)))
@@ -166,7 +187,7 @@ export function UserManagementView() {
 
   function openEdit(user: AdminUser) {
     setEditTarget(user)
-    setEditForm({ displayName: user.displayName, password: "" })
+    setEditForm({ displayName: user.displayName, contact: user.contact ?? "", password: "" })
     setEditError("")
     setShowEditPw(false)
   }
@@ -199,6 +220,7 @@ export function UserManagementView() {
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground w-12">번호</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">아이디</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">이름</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">연락처</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">상태</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">등록일</th>
                 <th className="px-4 py-3 text-right font-medium text-muted-foreground">관리</th>
@@ -207,7 +229,7 @@ export function UserManagementView() {
             <tbody>
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-16 text-center text-muted-foreground">등록된 사용자가 없습니다.</td>
+                  <td colSpan={7} className="py-16 text-center text-muted-foreground">등록된 사용자가 없습니다.</td>
                 </tr>
               ) : (
                 users.map((user, idx) => (
@@ -220,6 +242,7 @@ export function UserManagementView() {
                       )}
                     </td>
                     <td className="px-4 py-3">{user.displayName}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{user.contact || "-"}</td>
                     <td className="px-4 py-3">
                       {user.enabled ? (
                         <Badge className="bg-green-100 text-green-700 hover:bg-green-100">활성</Badge>
@@ -282,7 +305,7 @@ export function UserManagementView() {
 
       {/* 사용자 등록 다이얼로그 */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className={`max-w-sm ${DIALOG_CENTER}`}>
           <DialogHeader>
             <DialogTitle>사용자 등록</DialogTitle>
           </DialogHeader>
@@ -304,6 +327,15 @@ export function UserManagementView() {
                 onChange={(e) => setAddForm((f) => ({ ...f, displayName: e.target.value }))}
                 placeholder="표시 이름 입력"
                 required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>연락처 <span className="text-muted-foreground font-normal">(선택)</span></Label>
+              <Input
+                value={addForm.contact}
+                onChange={(e) => setAddForm((f) => ({ ...f, contact: formatPhone(e.target.value) }))}
+                placeholder="010-0000-0000"
+                inputMode="numeric"
               />
             </div>
             <div className="space-y-1.5">
@@ -357,7 +389,7 @@ export function UserManagementView() {
 
       {/* 사용자 수정 다이얼로그 */}
       <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) setEditTarget(null) }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className={`max-w-sm ${DIALOG_CENTER}`}>
           <DialogHeader>
             <DialogTitle>사용자 수정 — {editTarget?.username}</DialogTitle>
           </DialogHeader>
@@ -369,6 +401,15 @@ export function UserManagementView() {
                 onChange={(e) => setEditForm((f) => ({ ...f, displayName: e.target.value }))}
                 placeholder="표시 이름"
                 required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>연락처 <span className="text-muted-foreground font-normal">(선택)</span></Label>
+              <Input
+                value={editForm.contact}
+                onChange={(e) => setEditForm((f) => ({ ...f, contact: formatPhone(e.target.value) }))}
+                placeholder="010-0000-0000"
+                inputMode="numeric"
               />
             </div>
             <div className="space-y-1.5">
@@ -401,7 +442,7 @@ export function UserManagementView() {
 
       {/* 비밀번호 초기화 다이얼로그 */}
       <Dialog open={!!resetTarget} onOpenChange={(o) => { if (!o) setResetTarget(null) }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className={`max-w-sm ${DIALOG_CENTER}`}>
           <DialogHeader>
             <DialogTitle>비밀번호 초기화 — {resetTarget?.username}</DialogTitle>
           </DialogHeader>
@@ -457,7 +498,7 @@ export function UserManagementView() {
 
       {/* 삭제 확인 다이얼로그 */}
       <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null) }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className={`max-w-sm ${DIALOG_CENTER}`}>
           <DialogHeader>
             <DialogTitle>사용자 삭제</DialogTitle>
           </DialogHeader>

@@ -16,6 +16,8 @@ import { LeaseView } from "@/components/erp/lease-view"
 import { CorporationsProvider } from "@/components/erp/corporations-context"
 import { ClosedCorporationsView } from "@/components/erp/closed-corporations-view"
 import { UserManagementView } from "@/components/erp/user-management-view"
+import { FixedExpenseView } from "@/components/erp/fixed-expense-view"
+import { TaxProgressView } from "@/components/erp/tax-progress-view"
 
 const validIds = new Set(menuItems.map((m) => m.id))
 
@@ -69,6 +71,10 @@ export function ErpLayout({ onLogout }: { onLogout: () => void }) {
             <LeaseView />
           ) : active === "closed" ? (
             <ClosedCorporationsView />
+          ) : active === "fixed-expense" ? (
+            <FixedExpenseView />
+          ) : active === "tax-progress" ? (
+            <TaxProgressView />
           ) : active === "user-management" ? (
             <UserManagementView />
           ) : (
