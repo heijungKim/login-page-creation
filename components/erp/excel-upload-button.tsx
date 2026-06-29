@@ -21,6 +21,7 @@ export type ExcelColumn = {
   label: string
   required?: boolean
   example?: string
+  options?: string[]
 }
 
 type UploadResult = { success: number; failed: Array<{ row: number; reason: string }> }
@@ -56,6 +57,20 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
 
     // 헤더 열 너비 설정
     ws["!cols"] = columns.map(() => ({ wch: 20 }))
+
+    // 드롭다운 데이터 유효성 검사
+    const dataValidations: XLSX.DataValidation[] = []
+    columns.forEach((col, colIdx) => {
+      if (!col.options?.length) return
+      const colLetter = XLSX.utils.encode_col(colIdx)
+      dataValidations.push({
+        type: "list",
+        sqref: `${colLetter}2:${colLetter}10000`,
+        formula1: `"${col.options.join(",")}"`,
+        showDropDown: false,
+      } as XLSX.DataValidation)
+    })
+    if (dataValidations.length > 0) ws["!dataValidations"] = dataValidations
 
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "데이터")
@@ -186,7 +201,7 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
                       ? "bg-primary/10 text-primary font-medium"
                       : "bg-muted text-muted-foreground"
                   )}>
-                    {c.label}{c.required && " *"}
+                    {c.label}{c.required && " *"}{c.options && ` (${c.options.join("/")})`}
                   </span>
                 ))}
               </div>

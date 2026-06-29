@@ -39,6 +39,7 @@ type PageResponse<T> = {
 }
 
 const STATUS_OPTIONS = ["활성", "대기중", "중지"]
+const STATUS_ORDER: Record<string, number> = { 활성: 0, 대기중: 1, 중지: 2 }
 
 const REGION_OPTIONS = [
   "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
@@ -52,6 +53,7 @@ const statusStyles: Record<string, string> = {
 }
 
 const columns = [
+  { key: "status", label: "상태", minWidth: "100px" },
   { key: "name", label: "이름", minWidth: "110px" },
   { key: "regNo", label: "주민번호", minWidth: "145px" },
   { key: "contact", label: "연락처", minWidth: "130px" },
@@ -59,14 +61,13 @@ const columns = [
   { key: "address", label: "주소", minWidth: "220px" },
   { key: "account", label: "계좌정보", minWidth: "190px" },
   { key: "note", label: "비고", minWidth: "160px" },
-  { key: "status", label: "상태", minWidth: "100px" },
   { key: "bizRegion", label: "지역", minWidth: "110px" },
   { key: "bizCity", label: "시", minWidth: "100px" },
   { key: "bizRegDate", label: "사업자 등록일", minWidth: "120px" },
   { key: "registeredAt", label: "등록일", minWidth: "110px" },
 ] as const
 
-const stickyOffsets = [0, 110]
+const stickyOffsets = [0, 100]
 
 type FormData = {
   name: string; regNo: string; contact: string; email: string
@@ -247,13 +248,16 @@ export function AuditRegionView() {
   useEffect(() => { void refresh() }, [])
 
   const filteredRows = useMemo(() =>
-    rows.filter((row) =>
-      columns.every((col) => {
-        const term = filters[col.key]?.trim().toLowerCase()
-        if (!term) return true
-        return String(row[col.key as keyof AuditEntry] ?? "").toLowerCase().includes(term)
-      })
-    ), [rows, filters])
+    rows
+      .filter((row) =>
+        columns.every((col) => {
+          const term = filters[col.key]?.trim().toLowerCase()
+          if (!term) return true
+          return String(row[col.key as keyof AuditEntry] ?? "").toLowerCase().includes(term)
+        })
+      )
+      .sort((a, b) => (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99)),
+    [rows, filters])
 
   async function handleSubmit() {
     setSubmitError(null)
@@ -298,16 +302,12 @@ export function AuditRegionView() {
           <ExcelUploadButton
             templateName="감사지역"
             columns={[
-              { key: "name", label: "이름", required: true, example: "홍길동" },
-              { key: "regNo", label: "주민번호", example: "900101-1234567" },
+              { key: "name", label: "성명", required: true, example: "홍길동" },
+              { key: "regNo", label: "주민등록번호", example: "900101-1234567" },
               { key: "contact", label: "연락처", example: "010-1234-5678" },
-              { key: "email", label: "이메일", example: "test@email.com" },
+              { key: "email", label: "이메일주소", example: "test@email.com" },
               { key: "address", label: "주소", example: "서울시 강남구" },
               { key: "account", label: "계좌정보", example: "국민은행 123-456-789012" },
-              { key: "bizRegion", label: "지역", example: "서울" },
-              { key: "bizCity", label: "시/구", example: "강남구" },
-              { key: "bizRegDate", label: "사업자등록일", example: "2020-01-01" },
-              { key: "status", label: "상태", example: "활성" },
               { key: "note", label: "비고", example: "" },
             ] satisfies ExcelColumn[]}
             onRows={async (rows) => {
@@ -319,8 +319,8 @@ export function AuditRegionView() {
                   await api.post("/api/audit-regions", {
                     name: r.name, regNo: r.regNo || "", contact: r.contact || "",
                     email: r.email || "", address: r.address || "", account: r.account || "",
-                    bizRegion: r.bizRegion || "", bizCity: r.bizCity || "",
-                    bizRegDate: r.bizRegDate || null, status: r.status || "활성", note: r.note || "",
+                    bizRegion: "서울", bizCity: "",
+                    bizRegDate: null, status: r.status || "활성", note: r.note || "",
                   })
                   success++
                 } catch (e) { failed.push({ row: i + 2, reason: e instanceof ApiError ? e.message : "오류" }) }

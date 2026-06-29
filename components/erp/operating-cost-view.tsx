@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useRef, useMemo, useState } from "react"
 import { Plus } from "lucide-react"
 import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
@@ -39,6 +39,8 @@ type Totals = {
   totalOut: number
   balance: number
 }
+
+const TAB_ORDER_KEY = "operating-cost-tab-order"
 
 const fmt = (n: number) => Math.round(n).toLocaleString("ko-KR") + "원"
 const today = () => new Date().toISOString().slice(0, 10)
@@ -79,12 +81,68 @@ export function OperatingCostView() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState(emptyForm())
   const [activeShortcut, setActiveShortcut] = useState<string | null>("전체")
+  const [tabOrder, setTabOrder] = useState<number[]>([])
+  const [draggingId, setDraggingId] = useState<number | null>(null)
+  const [dragOverId, setDragOverId] = useState<number | null>(null)
+  const dragItemRef = useRef<number | null>(null)
+
+  // 탭 순서 복원 및 신규 법인 병합
+  useEffect(() => {
+    if (operatingCorps.length === 0) return
+    const saved = (() => {
+      try { return JSON.parse(localStorage.getItem(TAB_ORDER_KEY) ?? "[]") as number[] }
+      catch { return [] as number[] }
+    })()
+    const corpIds = operatingCorps.map((c) => c.id!)
+    const ordered = [
+      ...saved.filter((id) => corpIds.includes(id)),
+      ...corpIds.filter((id) => !saved.includes(id)),
+    ]
+    setTabOrder(ordered)
+  }, [operatingCorps])
+
+  const sortedCorps = useMemo(() => {
+    if (tabOrder.length === 0) return operatingCorps
+    return [...operatingCorps].sort((a, b) => {
+      const ai = tabOrder.indexOf(a.id!)
+      const bi = tabOrder.indexOf(b.id!)
+      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+    })
+  }, [operatingCorps, tabOrder])
 
   useEffect(() => {
-    if (activeTab == null && operatingCorps.length > 0) {
-      setActiveTab(operatingCorps[0].id!)
+    if (activeTab == null && sortedCorps.length > 0) {
+      setActiveTab(sortedCorps[0].id!)
     }
-  }, [operatingCorps, activeTab])
+  }, [sortedCorps, activeTab])
+
+  function handleDragStart(id: number) {
+    dragItemRef.current = id
+    setDraggingId(id)
+  }
+  function handleDragOver(e: React.DragEvent, id: number) {
+    e.preventDefault()
+    setDragOverId(id)
+  }
+  function handleDrop(targetId: number) {
+    const fromId = dragItemRef.current
+    if (fromId == null || fromId === targetId) { setDraggingId(null); setDragOverId(null); return }
+    setTabOrder((prev) => {
+      const next = [...prev]
+      const fi = next.indexOf(fromId)
+      const ti = next.indexOf(targetId)
+      next.splice(fi, 1)
+      next.splice(ti, 0, fromId)
+      localStorage.setItem(TAB_ORDER_KEY, JSON.stringify(next))
+      return next
+    })
+    setDraggingId(null)
+    setDragOverId(null)
+  }
+  function handleDragEnd() {
+    setDraggingId(null)
+    setDragOverId(null)
+  }
 
   async function refresh(corporationId: number, from: string, to: string) {
     setLoading(true)
@@ -264,21 +322,31 @@ export function OperatingCostView() {
         <>
           {/* 법인 탭 */}
           <div className="flex gap-0 border-b border-border overflow-x-auto">
-            {operatingCorps.map((corp) => {
+            {sortedCorps.map((corp) => {
               const isClosed = corp.status === "폐업"
               const isActive = activeTab === corp.id
+              const isDragging = draggingId === corp.id
+              const isOver = dragOverId === corp.id && draggingId !== corp.id
               return (
                 <button
                   key={corp.id}
+                  draggable
+                  onDragStart={() => handleDragStart(corp.id!)}
+                  onDragOver={(e) => handleDragOver(e, corp.id!)}
+                  onDrop={() => handleDrop(corp.id!)}
+                  onDragEnd={handleDragEnd}
                   onClick={() => { setActiveTab(corp.id!); setEditingId(null) }}
                   className={cn(
-                    "relative flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap",
+                    "relative flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap select-none",
                     isActive
                       ? "border-primary text-foreground bg-primary/5"
                       : "border-transparent text-muted-foreground hover:text-foreground hover:border-border hover:bg-muted/40",
+                    isDragging && "opacity-40",
+                    isOver && "border-b-2 border-b-primary/60 bg-primary/10",
+                    "cursor-grab active:cursor-grabbing",
                   )}
                 >
-                  {isActive && (
+                  {isActive && !isOver && (
                     <span className="absolute left-0 top-0 bottom-0 w-0.5 rounded-r bg-primary" />
                   )}
                   <span className={cn(isActive && "font-semibold")}>{corp.name}</span>
