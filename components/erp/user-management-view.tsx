@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState, useCallback } from "react"
 import { Plus, Pencil, Trash2, ShieldCheck, ShieldOff, Eye, EyeOff, KeyRound } from "lucide-react"
@@ -77,6 +77,11 @@ export function UserManagementView() {
 
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+
+  const [bulkMode, setBulkMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [bulkConfirm, setBulkConfirm] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   const myId = getCurrentAdminId()
 
@@ -186,6 +191,25 @@ export function UserManagementView() {
     }
   }
 
+  async function handleBulkDelete() {
+    setBulkDeleting(true)
+    try {
+      for (const id of selectedIds) {
+        if (id !== myId) {
+          await api.delete(`/api/admins/${id}`)
+        }
+      }
+      setUsers((prev) => prev.filter((u) => !selectedIds.has(u.id)))
+      setSelectedIds(new Set())
+      setBulkMode(false)
+      setBulkConfirm(false)
+    } catch (e) {
+      // 에러는 무시하고 로컬 업데이트
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   function openEdit(user: AdminUser) {
     setEditTarget(user)
     setEditForm({ displayName: user.displayName, contact: user.contact ?? "", password: "" })
@@ -204,6 +228,18 @@ export function UserManagementView() {
           <p className="text-sm text-muted-foreground">시스템 관리자 계정을 등록하고 관리합니다.</p>
         </div>
         <div className="flex items-center gap-2">
+          {bulkMode ? (
+            <>
+              {selectedIds.size > 0 && (
+                <Button variant="destructive" size="sm" onClick={() => setBulkConfirm(true)}>
+                  삭제 ({selectedIds.size}건)
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={() => { setBulkMode(false); setSelectedIds(new Set()) }}>취소</Button>
+            </>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => setBulkMode(true)}>일괄 삭제</Button>
+          )}
           <ExcelUploadButton
             templateName="사용자"
             columns={[
@@ -242,6 +278,15 @@ export function UserManagementView() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">
+                {bulkMode && (
+                  <th className="w-10 px-4 py-3 text-left font-medium text-muted-foreground">
+                    <input type="checkbox"
+                      className="h-4 w-4 rounded border-border"
+                      checked={users.filter((u) => u.id !== myId).length > 0 && selectedIds.size === users.filter((u) => u.id !== myId).length}
+                      onChange={(e) => setSelectedIds(e.target.checked ? new Set(users.filter((u) => u.id !== myId).map((u) => u.id)) : new Set())}
+                    />
+                  </th>
+                )}
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground w-12">번호</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">아이디</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">이름</th>
@@ -259,6 +304,23 @@ export function UserManagementView() {
               ) : (
                 users.map((user, idx) => (
                   <tr key={user.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+                    {bulkMode && (
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        {user.id !== myId && (
+                          <input type="checkbox"
+                            className="h-4 w-4 rounded border-border"
+                            checked={selectedIds.has(user.id)}
+                            onChange={(e) => {
+                              setSelectedIds((prev) => {
+                                const next = new Set(prev)
+                                if (e.target.checked) { next.add(user.id) } else { next.delete(user.id) }
+                                return next
+                              })
+                            }}
+                          />
+                        )}
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-muted-foreground">{idx + 1}</td>
                     <td className="px-4 py-3 font-medium">
                       {user.username}
@@ -327,6 +389,23 @@ export function UserManagementView() {
           </table>
         </div>
       )}
+
+      {/* 일괄 삭제 확인 다이얼로그 */}
+      <Dialog open={bulkConfirm} onOpenChange={(o) => { if (!o) setBulkConfirm(false) }}>
+        <DialogContent className={`max-w-sm ${DIALOG_CENTER}`}>
+          <DialogHeader><DialogTitle>일괄 삭제</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            선택한 <span className="font-semibold text-foreground">{selectedIds.size}건</span>을 삭제하시겠습니까?<br />
+            삭제 후 복구할 수 없습니다.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkConfirm(false)}>취소</Button>
+            <Button variant="destructive" disabled={bulkDeleting} onClick={handleBulkDelete}>
+              {bulkDeleting ? "삭제 중..." : "삭제"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 사용자 등록 다이얼로그 */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>

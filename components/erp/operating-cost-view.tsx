@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useRef, useMemo, useState } from "react"
 import { Plus } from "lucide-react"
@@ -63,7 +63,7 @@ export function OperatingCostView() {
   const { rows: corporations, loading: corpsLoading } = useCorporations()
 
   const operatingCorps = useMemo(
-    () => corporations.filter((c) => c.id != null),
+    () => corporations.filter((c) => c.id != null && c.category === "운영 법인"),
     [corporations],
   )
 
@@ -85,6 +85,10 @@ export function OperatingCostView() {
   const [draggingId, setDraggingId] = useState<number | null>(null)
   const [dragOverId, setDragOverId] = useState<number | null>(null)
   const dragItemRef = useRef<number | null>(null)
+  const [bulkMode, setBulkMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [bulkConfirm, setBulkConfirm] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   // 탭 순서 복원 및 신규 법인 병합
   useEffect(() => {
@@ -216,6 +220,24 @@ export function OperatingCostView() {
     }
   }
 
+  async function handleBulkDelete() {
+    if (activeTab == null) return
+    setBulkDeleting(true)
+    try {
+      for (const id of selectedIds) {
+        await api.delete(`/api/operating-costs/${id}`)
+      }
+      await refresh(activeTab, appliedFrom, appliedTo)
+      setSelectedIds(new Set())
+      setBulkMode(false)
+      setBulkConfirm(false)
+    } catch (e) {
+      // 에러는 무시하고 refresh
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   async function handleDelete(id: number) {
     if (activeTab == null) return
     if (!confirm("삭제하시겠습니까?")) return
@@ -269,7 +291,20 @@ export function OperatingCostView() {
           <h2 className="text-xl font-semibold tracking-tight text-foreground">운영비 관리</h2>
           <p className="text-sm text-muted-foreground">법인별 입출금 내역을 관리합니다.</p>
         </div>
-        <ExcelUploadButton
+        <div className="flex items-center gap-2">
+          {bulkMode ? (
+            <>
+              {selectedIds.size > 0 && (
+                <Button variant="destructive" size="sm" onClick={() => setBulkConfirm(true)}>
+                  삭제 ({selectedIds.size}건)
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={() => { setBulkMode(false); setSelectedIds(new Set()) }}>취소</Button>
+            </>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => setBulkMode(true)}>일괄 삭제</Button>
+          )}
+          <ExcelUploadButton
           templateName="운영비"
           columns={[
             { key: "date", label: "날짜", required: true, example: "2025-01-15" },
@@ -301,6 +336,7 @@ export function OperatingCostView() {
             return { success, failed }
           }}
         />
+        </div>
       </div>
 
       {error ? (
@@ -541,6 +577,15 @@ export function OperatingCostView() {
                 <table className="w-full border-collapse text-sm">
                   <thead className="sticky top-0 z-10">
                     <tr className="border-b border-border bg-muted/70 text-left text-muted-foreground">
+                      {bulkMode && (
+                        <th className="w-10 px-3 py-2.5 font-medium">
+                          <input type="checkbox"
+                            className="h-4 w-4 rounded border-border"
+                            checked={selectedIds.size === filtered.length && filtered.length > 0}
+                            onChange={(e) => setSelectedIds(e.target.checked ? new Set(filtered.map((tx) => tx.id)) : new Set())}
+                          />
+                        </th>
+                      )}
                       <th className="px-3 py-2.5 font-medium whitespace-nowrap">날짜</th>
                       <th className="px-3 py-2.5 font-medium whitespace-nowrap">유형</th>
                       <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">금액</th>
@@ -561,6 +606,21 @@ export function OperatingCostView() {
                     ) : (
                       filtered.map((tx) => (
                         <tr key={tx.id} className="border-b border-border/50 last:border-0 hover:bg-accent/40 transition-colors">
+                          {bulkMode && (
+                            <td className="w-10 px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                              <input type="checkbox"
+                                className="h-4 w-4 rounded border-border"
+                                checked={selectedIds.has(tx.id)}
+                                onChange={(e) => {
+                                  setSelectedIds((prev) => {
+                                    const next = new Set(prev)
+                                    if (e.target.checked) { next.add(tx.id) } else { next.delete(tx.id) }
+                                    return next
+                                  })
+                                }}
+                              />
+                            </td>
+                          )}
                           <td className="px-3 py-2.5 whitespace-nowrap text-sm">
                             {editingId === tx.id
                               ? <Input type="date" value={editForm.date} onChange={(e) => setEditForm((f) => ({ ...f, date: e.target.value }))} className="h-8 w-36" />
@@ -632,6 +692,25 @@ export function OperatingCostView() {
             </CardContent>
           </Card>
         </>
+      )}
+
+      {/* 일괄 삭제 확인 다이얼로그 */}
+      {bulkConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-sm rounded-lg border border-border bg-background p-6 shadow-lg">
+            <h2 className="text-base font-semibold mb-2">일괄 삭제</h2>
+            <p className="text-sm text-muted-foreground py-2">
+              선택한 <span className="font-semibold text-foreground">{selectedIds.size}건</span>을 삭제하시겠습니까?<br />
+              삭제 후 복구할 수 없습니다.
+            </p>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={() => setBulkConfirm(false)}>취소</Button>
+              <Button variant="destructive" disabled={bulkDeleting} onClick={handleBulkDelete}>
+                {bulkDeleting ? "삭제 중..." : "삭제"}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

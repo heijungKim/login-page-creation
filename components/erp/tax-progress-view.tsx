@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState, useCallback } from "react"
 import { Plus, Pencil, Trash2 } from "lucide-react"
@@ -132,6 +132,11 @@ export function TaxProgressView() {
   const [deleteTarget, setDeleteTarget] = useState<TaxProgress | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
 
+  const [bulkMode, setBulkMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [bulkConfirm, setBulkConfirm] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -207,6 +212,23 @@ export function TaxProgressView() {
     }
   }
 
+  async function handleBulkDelete() {
+    setBulkDeleting(true)
+    try {
+      for (const id of selectedIds) {
+        await api.delete(`/api/tax-progress/${id}`)
+      }
+      setRows((prev) => prev.filter((r) => !selectedIds.has(r.id)))
+      setSelectedIds(new Set())
+      setBulkMode(false)
+      setBulkConfirm(false)
+    } catch (e) {
+      // 에러는 무시하고 로컬 업데이트
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   function openEdit(row: TaxProgress) {
     setEditTarget(row)
     setEditForm({
@@ -230,6 +252,18 @@ export function TaxProgressView() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {bulkMode ? (
+            <>
+              {selectedIds.size > 0 && (
+                <Button variant="destructive" size="sm" onClick={() => setBulkConfirm(true)}>
+                  삭제 ({selectedIds.size}건)
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={() => { setBulkMode(false); setSelectedIds(new Set()) }}>취소</Button>
+            </>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => setBulkMode(true)}>일괄 삭제</Button>
+          )}
           <ExcelUploadButton
             templateName="세무진행현황"
             columns={[
@@ -271,6 +305,15 @@ export function TaxProgressView() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40 text-left text-muted-foreground">
+              {bulkMode && (
+                <th className="w-10 px-4 py-3 font-medium">
+                  <input type="checkbox"
+                    className="h-4 w-4 rounded border-border"
+                    checked={selectedIds.size === rows.length && rows.length > 0}
+                    onChange={(e) => setSelectedIds(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())}
+                  />
+                </th>
+              )}
               <th className="px-4 py-3 font-medium">법인명</th>
               <th className="px-4 py-3 font-medium">신고 업무</th>
               <th className="px-4 py-3 font-medium">신고기한</th>
@@ -288,6 +331,21 @@ export function TaxProgressView() {
             ) : (
               rows.map((row) => (
                 <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+                  {bulkMode && (
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox"
+                        className="h-4 w-4 rounded border-border"
+                        checked={selectedIds.has(row.id)}
+                        onChange={(e) => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev)
+                            if (e.target.checked) { next.add(row.id) } else { next.delete(row.id) }
+                            return next
+                          })
+                        }}
+                      />
+                    </td>
+                  )}
                   <td className="px-4 py-3 font-medium">{row.corpName}</td>
                   <td className="px-4 py-3">{row.task}</td>
                   <td className="px-4 py-3 text-muted-foreground">{row.dueDate}</td>
@@ -310,6 +368,23 @@ export function TaxProgressView() {
           </tbody>
         </table>
       </div>
+
+      {/* 일괄 삭제 확인 다이얼로그 */}
+      <Dialog open={bulkConfirm} onOpenChange={(o) => { if (!o) setBulkConfirm(false) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>일괄 삭제</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            선택한 <span className="font-semibold text-foreground">{selectedIds.size}건</span>을 삭제하시겠습니까?<br />
+            삭제 후 복구할 수 없습니다.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkConfirm(false)}>취소</Button>
+            <Button variant="destructive" disabled={bulkDeleting} onClick={handleBulkDelete}>
+              {bulkDeleting ? "삭제 중..." : "삭제"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 등록 */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>

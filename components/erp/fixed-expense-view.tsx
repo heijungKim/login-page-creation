@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState, useCallback, useRef } from "react"
 import { Trash2, ChevronLeft, ChevronRight, Save, Plus } from "lucide-react"
@@ -46,6 +46,10 @@ export function FixedExpenseView() {
 
   const [deleteTarget, setDeleteTarget] = useState<Item | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [bulkMode, setBulkMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [bulkConfirm, setBulkConfirm] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   function prevMonth() {
     if (month === 1) { setYear((y) => y - 1); setMonth(12) }
@@ -175,6 +179,23 @@ export function FixedExpenseView() {
     }
   }
 
+  async function handleBulkDelete() {
+    setBulkDeleting(true)
+    try {
+      for (const id of selectedIds) {
+        await api.delete(`/api/fixed-expense-items/${id}`)
+      }
+      setItems((prev) => prev.filter((i) => !selectedIds.has(i.id)))
+      setSelectedIds(new Set())
+      setBulkMode(false)
+      setBulkConfirm(false)
+    } catch (e) {
+      // 에러는 무시하고 로컬 업데이트
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   // 항목 삭제
   async function handleDelete() {
     if (!deleteTarget) return
@@ -213,10 +234,24 @@ export function FixedExpenseView() {
           <h2 className="text-lg font-semibold">고정지출</h2>
           <p className="text-sm text-muted-foreground">전체 {items.length}개 항목</p>
         </div>
-        <Button onClick={handleSaveAll} disabled={saving || !hasChanges} className="gap-1.5">
-          <Save className="h-4 w-4" />
-          {saving ? "저장 중..." : savedMsg ? "저장 완료!" : "전체 저장"}
-        </Button>
+        <div className="flex items-center gap-2">
+          {bulkMode ? (
+            <>
+              {selectedIds.size > 0 && (
+                <Button variant="destructive" size="sm" onClick={() => setBulkConfirm(true)}>
+                  삭제 ({selectedIds.size}건)
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={() => { setBulkMode(false); setSelectedIds(new Set()) }}>취소</Button>
+            </>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => setBulkMode(true)}>일괄 삭제</Button>
+          )}
+          <Button onClick={handleSaveAll} disabled={saving || !hasChanges} className="gap-1.5">
+            <Save className="h-4 w-4" />
+            {saving ? "저장 중..." : savedMsg ? "저장 완료!" : "전체 저장"}
+          </Button>
+        </div>
       </div>
 
       {/* 월 네비게이터 */}
@@ -262,6 +297,15 @@ export function FixedExpenseView() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40 text-left text-muted-foreground">
+              {bulkMode && (
+                <th className="w-10 px-4 py-3 font-medium">
+                  <input type="checkbox"
+                    className="h-4 w-4 rounded border-border"
+                    checked={selectedIds.size === items.length && items.length > 0}
+                    onChange={(e) => setSelectedIds(e.target.checked ? new Set(items.map((i) => i.id)) : new Set())}
+                  />
+                </th>
+              )}
               <th className="px-4 py-3 font-medium w-[150px]">날짜</th>
               <th className="px-4 py-3 font-medium w-[180px]">항목명</th>
               <th className="px-4 py-3 font-medium w-[150px]">금액 (원)</th>
@@ -291,6 +335,21 @@ export function FixedExpenseView() {
                       row.error ? "bg-destructive/5" : "hover:bg-muted/10"
                     )}
                   >
+                    {bulkMode && (
+                      <td className="w-10 px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                        <input type="checkbox"
+                          className="h-4 w-4 rounded border-border"
+                          checked={selectedIds.has(item.id)}
+                          onChange={(e) => {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev)
+                              if (e.target.checked) { next.add(item.id) } else { next.delete(item.id) }
+                              return next
+                            })
+                          }}
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-2">
                       <Input
                         type="date"
@@ -349,6 +408,23 @@ export function FixedExpenseView() {
           )}
         </table>
       </div>
+
+      {/* 일괄 삭제 확인 */}
+      <Dialog open={bulkConfirm} onOpenChange={(o) => { if (!o) setBulkConfirm(false) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>일괄 삭제</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            선택한 <span className="font-semibold text-foreground">{selectedIds.size}건</span>을 삭제하시겠습니까?<br />
+            삭제 후 복구할 수 없습니다.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkConfirm(false)}>취소</Button>
+            <Button variant="destructive" disabled={bulkDeleting} onClick={handleBulkDelete}>
+              {bulkDeleting ? "삭제 중..." : "삭제"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 항목 삭제 확인 */}
       <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null) }}>

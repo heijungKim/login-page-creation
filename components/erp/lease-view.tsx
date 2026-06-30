@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useMemo, useState } from "react"
 import { Plus } from "lucide-react"
@@ -178,6 +178,10 @@ export function LeaseView() {
   const [editMode, setEditMode] = useState(false)
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
+  const [bulkMode, setBulkMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [bulkConfirm, setBulkConfirm] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   const set = (k: keyof FormData, v: string) => setForm((f) => ({ ...f, [k]: v }))
   const setDetailField = (k: keyof FormData, v: string) => setDetailForm((f) => ({ ...f, [k]: v }))
@@ -252,6 +256,23 @@ export function LeaseView() {
     }
   }
 
+  async function handleBulkDelete() {
+    setBulkDeleting(true)
+    try {
+      for (const id of selectedIds) {
+        await api.delete(`/api/leases/${id}`)
+      }
+      await refresh()
+      setSelectedIds(new Set())
+      setBulkMode(false)
+      setBulkConfirm(false)
+    } catch (e) {
+      // 에러는 무시하고 refresh
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   function resetDetail(row: LeaseEntry) {
     setDetailForm(toFormData(row))
     setEditMode(false)
@@ -267,6 +288,18 @@ export function LeaseView() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {bulkMode ? (
+            <>
+              {selectedIds.size > 0 && (
+                <Button variant="destructive" size="sm" onClick={() => setBulkConfirm(true)}>
+                  삭제 ({selectedIds.size}건)
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={() => { setBulkMode(false); setSelectedIds(new Set()) }}>취소</Button>
+            </>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => setBulkMode(true)}>일괄 삭제</Button>
+          )}
           <ExcelUploadButton
             templateName="임대차"
             columns={[
@@ -320,6 +353,15 @@ export function LeaseView() {
             <table className="w-full border-collapse text-sm">
               <thead className="sticky top-0 z-20">
                 <tr className="text-left text-muted-foreground">
+                  {bulkMode && (
+                    <th className="w-10 px-3 py-2.5 border-b border-border bg-muted/70">
+                      <input type="checkbox"
+                        className="h-4 w-4 rounded border-border"
+                        checked={selectedIds.size === filteredRows.length && filteredRows.length > 0}
+                        onChange={(e) => setSelectedIds(e.target.checked ? new Set(filteredRows.map((r) => r.id)) : new Set())}
+                      />
+                    </th>
+                  )}
                   {columns.map((col, colIdx) => (
                     <th
                       key={col.key}
@@ -374,6 +416,21 @@ export function LeaseView() {
                       className="group cursor-pointer border-b border-border/50 transition-colors last:border-0 hover:bg-accent/50"
                       onClick={() => openDetail(row)}
                     >
+                      {bulkMode && (
+                        <td className="w-10 px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                          <input type="checkbox"
+                            className="h-4 w-4 rounded border-border"
+                            checked={selectedIds.has(row.id)}
+                            onChange={(e) => {
+                              setSelectedIds((prev) => {
+                                const next = new Set(prev)
+                                if (e.target.checked) { next.add(row.id) } else { next.delete(row.id) }
+                                return next
+                              })
+                            }}
+                          />
+                        </td>
+                      )}
                       {columns.map((col, colIdx) => (
                         <td
                           key={col.key}
@@ -400,6 +457,23 @@ export function LeaseView() {
           </div>
         </CardContent>
       </Card>
+
+      {/* 일괄 삭제 확인 다이얼로그 */}
+      <Dialog open={bulkConfirm} onOpenChange={(o) => { if (!o) setBulkConfirm(false) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>일괄 삭제</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            선택한 <span className="font-semibold text-foreground">{selectedIds.size}건</span>을 삭제하시겠습니까?<br />
+            삭제 후 복구할 수 없습니다.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkConfirm(false)}>취소</Button>
+            <Button variant="destructive" disabled={bulkDeleting} onClick={handleBulkDelete}>
+              {bulkDeleting ? "삭제 중..." : "삭제"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!detail} onOpenChange={(o) => { if (!o) { setDetail(null); setEditMode(false); setSubmitError(null) } }}>
         <DialogContent className="!w-[50vw] !max-w-[50vw] max-h-[90vh] overflow-y-auto">
