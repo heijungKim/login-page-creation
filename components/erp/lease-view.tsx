@@ -201,14 +201,17 @@ export function LeaseView() {
   }, [])
 
   const filteredRows = useMemo(() =>
-    rows.filter((row) =>
-      columns.every((col) => {
-        const term = filters[col.key]?.trim().toLowerCase()
-        if (!term) return true
-        const value = row[col.key as keyof LeaseEntry]
-        return String(value ?? "").toLowerCase().includes(term)
-      })
-    ), [rows, filters])
+    rows
+      .filter((row) =>
+        columns.every((col) => {
+          const term = filters[col.key]?.trim().toLowerCase()
+          if (!term) return true
+          const value = row[col.key as keyof LeaseEntry]
+          return String(value ?? "").toLowerCase().includes(term)
+        })
+      )
+      .sort((a, b) => (b.registeredAt ?? "").localeCompare(a.registeredAt ?? "")),
+    [rows, filters])
 
   async function handleSubmit() {
     setSubmitError(null)

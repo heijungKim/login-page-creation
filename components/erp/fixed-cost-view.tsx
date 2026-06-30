@@ -271,17 +271,19 @@ export function FixedCostView() {
   }, [])
 
   const filteredRows = useMemo(() => {
-    return rows.filter((row) =>
-      columns.every((col) => {
-        const term = filters[col.key]?.trim()
-        if (!term) return true
-        if (col.filterOptions) return String(row[col.key]) === term
-        if (col.key === "amount") {
-          return String(row.amount).includes(term.replace(/,/g, ""))
-        }
-        return String(row[col.key] ?? "").toLowerCase().includes(term.toLowerCase())
-      }),
-    )
+    return rows
+      .filter((row) =>
+        columns.every((col) => {
+          const term = filters[col.key]?.trim()
+          if (!term) return true
+          if (col.filterOptions) return String(row[col.key]) === term
+          if (col.key === "amount") {
+            return String(row.amount).includes(term.replace(/,/g, ""))
+          }
+          return String(row[col.key] ?? "").toLowerCase().includes(term.toLowerCase())
+        }),
+      )
+      .sort((a, b) => (b.registeredAt ?? "").localeCompare(a.registeredAt ?? ""))
   }, [rows, filters])
 
   const loadPayments = useCallback(async (id: number) => {

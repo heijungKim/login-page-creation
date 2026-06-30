@@ -78,13 +78,15 @@ export function ClosedCorporationsView() {
   const closedRows = useMemo(() => rows.filter((r) => r.status === "폐업"), [rows])
 
   const filteredRows = useMemo(() => {
-    return closedRows.filter((row) =>
-      columns.every((col) => {
-        const term = filters[col.key]?.trim()
-        if (!term) return true
-        return String(row[col.key] ?? "").toLowerCase().includes(term.toLowerCase())
-      }),
-    )
+    return closedRows
+      .filter((row) =>
+        columns.every((col) => {
+          const term = filters[col.key]?.trim()
+          if (!term) return true
+          return String(row[col.key] ?? "").toLowerCase().includes(term.toLowerCase())
+        }),
+      )
+      .sort((a, b) => (b.registeredAt ?? "").localeCompare(a.registeredAt ?? ""))
   }, [closedRows, filters])
 
   function setFilter(key: string, value: string) {

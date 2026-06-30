@@ -85,7 +85,7 @@ export function UserManagementView() {
     setError(null)
     try {
       const data = await api.get<AdminUser[]>("/api/admins")
-      setUsers(data)
+      setUsers([...data].sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "목록을 불러오지 못했습니다.")
     } finally {

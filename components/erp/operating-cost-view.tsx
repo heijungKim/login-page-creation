@@ -179,7 +179,7 @@ export function OperatingCostView() {
   }, [activeTab, appliedFrom, appliedTo])
 
   const filtered = useMemo(
-    () => [...transactions].sort((a, b) => a.date.localeCompare(b.date)),
+    () => [...transactions].sort((a, b) => b.date.localeCompare(a.date)),
     [transactions],
   )
 

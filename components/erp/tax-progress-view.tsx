@@ -137,7 +137,7 @@ export function TaxProgressView() {
     setError(null)
     try {
       const data = await api.get<TaxProgress[]>("/api/tax-progress")
-      setRows(data)
+      setRows([...data].sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "목록을 불러오지 못했습니다.")
     } finally {

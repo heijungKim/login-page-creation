@@ -321,14 +321,17 @@ export function BusinessIncomeView() {
   useEffect(() => { void refresh() }, [])
 
   const filteredRows = useMemo(() =>
-    rows.filter((row) =>
-      columns.every((col) => {
-        const term = filters[col.key]?.trim().toLowerCase()
-        if (!term) return true
-        const val = String(row[col.key as keyof IncomeEntry] ?? "")
-        return val.toLowerCase().includes(term)
-      })
-    ), [rows, filters])
+    rows
+      .filter((row) =>
+        columns.every((col) => {
+          const term = filters[col.key]?.trim().toLowerCase()
+          if (!term) return true
+          const val = String(row[col.key as keyof IncomeEntry] ?? "")
+          return val.toLowerCase().includes(term)
+        })
+      )
+      .sort((a, b) => (b.registeredAt ?? "").localeCompare(a.registeredAt ?? "")),
+    [rows, filters])
 
   async function refreshDetail(id: number) {
     try {

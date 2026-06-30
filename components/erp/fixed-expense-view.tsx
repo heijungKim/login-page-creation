@@ -64,7 +64,7 @@ export function FixedExpenseView() {
         api.get<Item[]>("/api/fixed-expense-items"),
         api.get<Entry[]>(`/api/fixed-expense-entries?year=${y}&month=${m}`),
       ])
-      setItems(itemList)
+      setItems([...itemList].sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
       setEntries(entryList)
       const states: Record<number, RowState> = {}
       for (const item of itemList) {

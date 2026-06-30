@@ -256,7 +256,11 @@ export function AuditRegionView() {
           return String(row[col.key as keyof AuditEntry] ?? "").toLowerCase().includes(term)
         })
       )
-      .sort((a, b) => (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99)),
+      .sort((a, b) => {
+        const sd = (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99)
+        if (sd !== 0) return sd
+        return b.registeredAt.localeCompare(a.registeredAt)
+      }),
     [rows, filters])
 
   async function handleSubmit() {

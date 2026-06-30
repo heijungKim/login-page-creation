@@ -189,7 +189,9 @@ export function CorporationsView() {
       .sort((a, b) => {
         const catDiff = orderIndex(categoryOrder, a.category) - orderIndex(categoryOrder, b.category)
         if (catDiff !== 0) return catDiff
-        return orderIndex(statusOrder, a.status) - orderIndex(statusOrder, b.status)
+        const stDiff = orderIndex(statusOrder, a.status) - orderIndex(statusOrder, b.status)
+        if (stDiff !== 0) return stDiff
+        return (b.registeredAt ?? "").localeCompare(a.registeredAt ?? "")
       })
   }, [activeRows, filters])
 
