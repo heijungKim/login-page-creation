@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils"
 import { suppressUnauthorizedRedirect } from "@/lib/api"
 
 function normalizeDate(val: string): string {
-  // "2026. 06. 24." / "2026. 6. 24" / "2026.06.24" / "2026/06/24" → "2026-06-24"
   const m = val.replace(/\.\s*/g, "-").replace(/\//g, "-").replace(/-+$/, "").trim()
   const parts = m.split("-").map((p) => p.trim().padStart(2, "0"))
   if (parts.length === 3 && parts[0].length === 4) return parts.join("-")
@@ -36,10 +35,10 @@ function validateRows(rows: Record<string, string>[], columns: ExcelColumn[]): C
       const val = (row[col.key] ?? "").trim()
       if (col.required && !val) {
         if (!errors[i]) errors[i] = {}
-        errors[i][col.key] = "필수 항목"
+        errors[i][col.key] = "필수 항목 — 값을 입력해주세요"
       } else if (col.options?.length && val && !col.options.includes(val)) {
         if (!errors[i]) errors[i] = {}
-        errors[i][col.key] = `허용값: ${col.options.join(" / ")}`
+        errors[i][col.key] = `"${val}" 은(는) 사용할 수 없는 값입니다\n입력 가능: ${col.options.join(" / ")}`
       }
     })
   })
@@ -63,8 +62,16 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const errorRowCount = Object.keys(cellErrors).length
-  const totalErrorCount = Object.values(cellErrors).reduce((sum, cols) => sum + Object.keys(cols).length, 0)
   const hasErrors = errorRowCount > 0
+
+  // 오류 목록: [{ rowLabel, colLabel, message }]
+  const errorList = Object.entries(cellErrors).flatMap(([rowIdx, cols]) =>
+    Object.entries(cols).map(([colKey, msg]) => ({
+      rowLabel: `${Number(rowIdx) + 2}행`,
+      colLabel: columns.find((c) => c.key === colKey)?.label ?? colKey,
+      message: msg,
+    }))
+  )
 
   function handleClose() {
     setOpen(false)
@@ -80,11 +87,7 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
     const headers = columns.map((c) => c.label)
     const example = columns.map((c) => c.example ?? "")
     const ws = XLSX.utils.aoa_to_sheet([headers, example])
-
-    // 헤더 열 너비 설정
     ws["!cols"] = columns.map(() => ({ wch: 20 }))
-
-    // 드롭다운 데이터 유효성 검사
     const dataValidations: XLSX.DataValidation[] = []
     columns.forEach((col, colIdx) => {
       if (!col.options?.length) return
@@ -97,7 +100,6 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
       } as XLSX.DataValidation)
     })
     if (dataValidations.length > 0) ws["!dataValidations"] = dataValidations
-
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "데이터")
     XLSX.writeFile(wb, `${templateName}_양식.xlsx`)
@@ -152,9 +154,9 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
             const val = row[idx]
             if (val instanceof Date) {
               const y = val.getFullYear()
-              const m = String(val.getMonth() + 1).padStart(2, "0")
+              const mo = String(val.getMonth() + 1).padStart(2, "0")
               const d = String(val.getDate()).padStart(2, "0")
-              obj[c.key] = `${y}-${m}-${d}`
+              obj[c.key] = `${y}-${mo}-${d}`
             } else {
               obj[c.key] = normalizeDate(String(val ?? "").trim())
             }
@@ -205,7 +207,7 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
       </Button>
 
       <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
-        <DialogContent className="max-w-2xl flex flex-col max-h-[88vh]">
+        <DialogContent className="max-w-4xl flex flex-col max-h-[90vh]">
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-base">엑셀 업로드 — {templateName}</DialogTitle>
           </DialogHeader>
@@ -247,7 +249,7 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
                 </Button>
                 {fileName && (
                   <div className="flex items-center gap-1.5 text-xs text-foreground">
-                    <span className="truncate max-w-[200px]">{fileName}</span>
+                    <span className="truncate max-w-[240px]">{fileName}</span>
                     <button onClick={() => { setFileName(""); setPreview([]); setParseError(null); setCellErrors({}); if (fileRef.current) fileRef.current.value = "" }}>
                       <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
                     </button>
@@ -262,43 +264,61 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
               )}
             </div>
 
-            {/* 미리보기 */}
+            {/* 오류 목록 */}
+            {hasErrors && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4">
+                <p className="text-xs font-semibold text-destructive flex items-center gap-1.5 mb-2">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  {errorRowCount}행에서 {errorList.length}개 오류 발견 — 엑셀 파일을 수정 후 다시 업로드해주세요
+                </p>
+                <ul className="space-y-1">
+                  {errorList.map((e, i) => (
+                    <li key={i} className="text-xs text-destructive flex gap-2">
+                      <span className="shrink-0 font-semibold w-10">{e.rowLabel}</span>
+                      <span className="shrink-0 font-medium text-destructive/80 w-24 truncate">[{e.colLabel}]</span>
+                      <span className="whitespace-pre-line">{e.message}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* 미리보기 — 전체 행 표시 */}
             {preview.length > 0 && (
               <div className="rounded-lg border border-border overflow-hidden">
                 <div className="px-4 py-2.5 bg-muted/40 border-b border-border flex items-center justify-between">
-                  <p className="text-xs font-semibold text-foreground">미리보기 ({preview.length}행)</p>
-                  <div className="flex items-center gap-3">
-                    {hasErrors && (
-                      <span className="flex items-center gap-1 text-xs font-medium text-destructive">
-                        <AlertCircle className="h-3.5 w-3.5" />
-                        {errorRowCount}행 {totalErrorCount}개 항목 오류 — 수정 후 업로드 가능
-                      </span>
-                    )}
-                    <p className="text-xs text-muted-foreground">최대 5행 표시</p>
-                  </div>
+                  <p className="text-xs font-semibold text-foreground">
+                    미리보기 ({preview.length}행
+                    {hasErrors && <span className="text-destructive"> · {errorRowCount}행 오류</span>})
+                  </p>
+                  {hasErrors && (
+                    <span className="text-[10px] text-destructive/70">빨간색 셀을 엑셀에서 수정 후 파일을 다시 선택해주세요</span>
+                  )}
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/20">
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap w-8">#</th>
+                <div className="overflow-auto max-h-80">
+                  <table className="w-full text-xs border-collapse">
+                    <thead className="sticky top-0 z-10">
+                      <tr className="border-b border-border bg-muted/30">
+                        <th className="px-3 py-2 text-center font-medium text-muted-foreground whitespace-nowrap w-10 bg-muted/30">행</th>
                         {columns.map((c) => (
-                          <th key={c.key} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">
+                          <th key={c.key} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap bg-muted/30">
                             {c.label}{c.required && <span className="text-destructive ml-0.5">*</span>}
                           </th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border/50">
-                      {preview.slice(0, 5).map((row, i) => {
+                    <tbody className="divide-y divide-border/40">
+                      {preview.map((row, i) => {
                         const rowHasError = !!cellErrors[i]
                         return (
-                          <tr key={i} className={cn(
-                            i % 2 === 1 ? "bg-muted/10" : "",
-                            rowHasError ? "bg-red-50/60" : ""
-                          )}>
+                          <tr
+                            key={i}
+                            className={cn(
+                              rowHasError ? "bg-red-50" : i % 2 === 1 ? "bg-muted/10" : ""
+                            )}
+                          >
                             <td className={cn(
-                              "px-3 py-1.5 text-center font-medium whitespace-nowrap",
+                              "px-3 py-2 text-center font-semibold whitespace-nowrap",
                               rowHasError ? "text-destructive" : "text-muted-foreground"
                             )}>
                               {i + 2}
@@ -308,20 +328,29 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
                               return (
                                 <td
                                   key={c.key}
-                                  title={err}
                                   className={cn(
-                                    "px-3 py-1.5 whitespace-nowrap max-w-[120px]",
-                                    err
-                                      ? "bg-red-100 text-red-700 font-medium"
-                                      : "text-foreground"
+                                    "px-3 py-2 whitespace-nowrap",
+                                    err ? "bg-red-100" : ""
                                   )}
                                 >
-                                  <span className="block truncate">
-                                    {row[c.key] || <span className="text-muted-foreground/50">-</span>}
-                                  </span>
-                                  {err && (
-                                    <span className="block text-[10px] text-red-500 leading-tight truncate">
-                                      {err}
+                                  {err ? (
+                                    <div className="flex items-start gap-1">
+                                      <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0 mt-0.5" />
+                                      <div>
+                                        <span className={cn(
+                                          "block font-medium",
+                                          row[c.key] ? "text-red-700" : "text-red-400 italic"
+                                        )}>
+                                          {row[c.key] || "비어 있음"}
+                                        </span>
+                                        <span className="block text-[10px] text-destructive/80 leading-tight whitespace-pre-line max-w-[200px]">
+                                          {err}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span className="block truncate max-w-[140px] text-foreground">
+                                      {row[c.key] || <span className="text-muted-foreground/40">-</span>}
                                     </span>
                                   )}
                                 </td>
@@ -333,16 +362,10 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
                     </tbody>
                   </table>
                 </div>
-                {preview.length > 5 && (
-                  <p className="px-4 py-2 text-xs text-muted-foreground border-t border-border">
-                    외 {preview.length - 5}행 더 있음
-                    {errorRowCount > 0 && ` (전체 ${errorRowCount}행 오류 포함)`}
-                  </p>
-                )}
               </div>
             )}
 
-            {/* 결과 */}
+            {/* 업로드 결과 */}
             {result && (
               <div className={cn(
                 "rounded-lg border p-4",
@@ -377,12 +400,11 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
               onClick={handleUpload}
               disabled={preview.length === 0 || uploading || hasErrors}
               className="gap-1.5 min-w-[80px]"
-              title={hasErrors ? `${errorRowCount}행의 오류를 수정해야 업로드할 수 있습니다` : undefined}
             >
               {uploading
                 ? <><Loader2 className="h-4 w-4 animate-spin" />업로드 중...</>
                 : hasErrors
-                  ? <><AlertCircle className="h-4 w-4" />{errorRowCount}행 오류</>
+                  ? <><AlertCircle className="h-4 w-4" />오류 수정 필요 ({errorRowCount}행)</>
                   : `${preview.length}건 업로드`
               }
             </Button>
