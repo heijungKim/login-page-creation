@@ -29,6 +29,7 @@ function getInitialPage(): string {
 
 export function ErpLayout({ onLogout }: { onLogout: () => void }) {
   const [active, setActive] = useState(getInitialPage)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const activeLabel = menuItems.find((m) => m.id === active)?.label ?? "대시보드"
 
   useEffect(() => {
@@ -44,45 +45,72 @@ export function ErpLayout({ onLogout }: { onLogout: () => void }) {
     return () => window.removeEventListener("hashchange", onHashChange)
   }, [])
 
+  // 화면 크기 변경 시 사이드바 닫기
+  useEffect(() => {
+    function onResize() {
+      if (window.innerWidth >= 768) setSidebarOpen(false)
+    }
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
+  }, [])
+
+  function handleSelect(id: string) {
+    setActive(id)
+    setSidebarOpen(false)
+  }
+
   return (
     <CorporationsProvider>
-    <div className="flex h-svh overflow-hidden bg-muted/40">
-      <ErpSidebar active={active} onSelect={setActive} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <ErpHeader title={activeLabel} onLogout={onLogout} />
-        <main className="flex-1 overflow-y-auto p-6">
-          {active === "dashboard" ? (
-            <DashboardView />
-          ) : active === "corporations" ? (
-            <CorporationsView />
-          ) : active === "fixed-cost" ? (
-            <FixedCostView />
-          ) : active === "telecom" ? (
-            <TelecomView />
-          ) : active === "prepaid" ? (
-            <PrepaidView />
-          ) : active === "business-income" ? (
-            <BusinessIncomeView />
-          ) : active === "operating-cost" ? (
-            <OperatingCostView />
-          ) : active === "audit-region" ? (
-            <AuditRegionView />
-          ) : active === "lease" ? (
-            <LeaseView />
-          ) : active === "closed" ? (
-            <ClosedCorporationsView />
-          ) : active === "fixed-expense" ? (
-            <FixedExpenseView />
-          ) : active === "tax-progress" ? (
-            <TaxProgressView />
-          ) : active === "user-management" ? (
-            <UserManagementView />
-          ) : (
-            <MenuView menuId={active} />
-          )}
-        </main>
+      <div className="flex h-svh overflow-hidden bg-muted/40">
+        {/* 모바일 오버레이 */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 z-30 bg-black/40 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        <ErpSidebar active={active} onSelect={handleSelect} open={sidebarOpen} />
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <ErpHeader
+            title={activeLabel}
+            onLogout={onLogout}
+            onMenuToggle={() => setSidebarOpen((o) => !o)}
+          />
+          <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
+            {active === "dashboard" ? (
+              <DashboardView />
+            ) : active === "corporations" ? (
+              <CorporationsView />
+            ) : active === "fixed-cost" ? (
+              <FixedCostView />
+            ) : active === "telecom" ? (
+              <TelecomView />
+            ) : active === "prepaid" ? (
+              <PrepaidView />
+            ) : active === "business-income" ? (
+              <BusinessIncomeView />
+            ) : active === "operating-cost" ? (
+              <OperatingCostView />
+            ) : active === "audit-region" ? (
+              <AuditRegionView />
+            ) : active === "lease" ? (
+              <LeaseView />
+            ) : active === "closed" ? (
+              <ClosedCorporationsView />
+            ) : active === "fixed-expense" ? (
+              <FixedExpenseView />
+            ) : active === "tax-progress" ? (
+              <TaxProgressView />
+            ) : active === "user-management" ? (
+              <UserManagementView />
+            ) : (
+              <MenuView menuId={active} />
+            )}
+          </main>
+        </div>
       </div>
-    </div>
     </CorporationsProvider>
   )
 }

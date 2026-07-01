@@ -85,12 +85,13 @@ export function OperatingCostView() {
   const [draggingId, setDraggingId] = useState<number | null>(null)
   const [dragOverId, setDragOverId] = useState<number | null>(null)
   const dragItemRef = useRef<number | null>(null)
+  const initializedRef = useRef(false)
   const [bulkMode, setBulkMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
-  // 탭 순서 복원 및 신규 법인 병합
+  // 탭 순서 복원 및 신규 법인 병합 + 최초 진입 시 항상 첫 번째 탭 선택
   useEffect(() => {
     if (operatingCorps.length === 0) return
     const saved = (() => {
@@ -103,6 +104,11 @@ export function OperatingCostView() {
       ...corpIds.filter((id) => !saved.includes(id)),
     ]
     setTabOrder(ordered)
+    // 페이지 진입 시 항상 첫 번째 탭으로 초기화
+    if (!initializedRef.current) {
+      initializedRef.current = true
+      setActiveTab(ordered[0] ?? null)
+    }
   }, [operatingCorps])
 
   const sortedCorps = useMemo(() => {
@@ -113,12 +119,6 @@ export function OperatingCostView() {
       return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
     })
   }, [operatingCorps, tabOrder])
-
-  useEffect(() => {
-    if (activeTab == null && sortedCorps.length > 0) {
-      setActiveTab(sortedCorps[0].id!)
-    }
-  }, [sortedCorps, activeTab])
 
   function handleDragStart(id: number) {
     dragItemRef.current = id
@@ -447,7 +447,7 @@ export function OperatingCostView() {
           </Card>
 
           {/* 합계 */}
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <div className="rounded-lg border border-border bg-card px-3 py-2.5 shadow-sm border-t-2 border-t-blue-500">
               <p className="text-[11px] text-muted-foreground">총 입금</p>
               <p className="text-base font-bold tabular-nums text-blue-600 truncate">{fmt(totalIn)}</p>

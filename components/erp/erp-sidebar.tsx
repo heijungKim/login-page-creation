@@ -14,6 +14,7 @@ import {
   PiggyBank,
   CalendarCheck,
   Users,
+  X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -74,20 +75,28 @@ export const menuItems: MenuItem[] = menuGroups.flatMap((g) => g.items)
 export function ErpSidebar({
   active,
   onSelect,
+  open,
 }: {
   active: string
   onSelect: (id: string) => void
+  open?: boolean
 }) {
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+    <aside className={cn(
+      "fixed inset-y-0 left-0 z-40 flex h-full w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-transform duration-200 ease-in-out",
+      "md:static md:z-auto md:translate-x-0",
+      open ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+    )}>
       {/* 로고 */}
-      <div className="flex h-16 items-center gap-3 px-5 border-b border-sidebar-border">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sidebar-primary shadow-md shadow-sidebar-primary/30">
-          <span className="text-white font-black text-lg leading-none select-none">F</span>
-        </div>
-        <div className="flex flex-col leading-tight">
-          <span className="text-sm font-bold text-sidebar-foreground">Freed</span>
-          <span className="text-[11px] text-sidebar-foreground/50 font-medium tracking-wide">ERP System</span>
+      <div className="flex h-14 items-center justify-between gap-3 px-5 border-b border-sidebar-border">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sidebar-primary shadow-md shadow-sidebar-primary/30">
+            <span className="text-white font-black text-lg leading-none select-none">F</span>
+          </div>
+          <div className="flex flex-col leading-tight">
+            <span className="text-sm font-bold text-sidebar-foreground">Freed</span>
+            <span className="text-[11px] text-sidebar-foreground/50 font-medium tracking-wide">ERP System</span>
+          </div>
         </div>
       </div>
 

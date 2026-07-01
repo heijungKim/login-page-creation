@@ -764,7 +764,7 @@ export function BusinessIncomeView() {
 
       {/* 상세 팝업 */}
       <Dialog open={!!detail} onOpenChange={(o) => { if (!o) { setDetail(null); setEditMode(false); setEditingPaymentId(null); setSubmitError(null) } }}>
-        <DialogContent className="!w-[78vw] !max-w-[78vw] max-h-[92vh] overflow-x-hidden overflow-y-auto p-0">
+        <DialogContent className="w-[95vw] max-w-[95vw] sm:w-[90vw] sm:max-w-[90vw] md:w-[85vw] md:max-w-[85vw] lg:w-[78vw] lg:max-w-[78vw] max-h-[92vh] overflow-x-hidden overflow-y-auto p-0">
           <DialogHeader className="px-6 pt-5 pb-4 border-b border-border bg-muted/30">
             <div className="flex items-start justify-between">
               <div>
@@ -784,7 +784,7 @@ export function BusinessIncomeView() {
               )}
 
               {/* 요약 카드 */}
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <StatCard label="총 매출액" value={fmt(detail.revenue)} />
                 <StatCard label="총 지급액" value={fmt(detail.payment)} sub={`수수료 ${detail.commission}%`} />
                 <StatCard label="원천징수 합계" value={fmt(detail.totalIncomeTax + detail.totalLocalTax)} accent="red" />
@@ -812,7 +812,7 @@ export function BusinessIncomeView() {
                 </div>
                 <div className="p-4">
                   {editMode ? (
-                    <div className="grid grid-cols-3 gap-x-6 gap-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3">
                       <Field id="detail-name" label="소득자명" required value={detailForm.name} onChange={(v) => setDetailField("name", v)} />
                       <Field id="detail-regno" label="주민번호" required value={detailForm.regNo} onChange={(v) => setDetailField("regNo", v)} />
                       <Field id="detail-phone" label="전화번호" value={detailForm.phone} onChange={(v) => setDetailField("phone", v)} />
@@ -827,7 +827,7 @@ export function BusinessIncomeView() {
                       <Field id="detail-memo" label="비고" value={detailForm.memo} onChange={(v) => setDetailField("memo", v)} placeholder="메모" />
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 gap-x-8 gap-y-3 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-3 text-sm">
                       {[
                         { label: "소득자명", value: detail.name },
                         { label: "주민번호", value: detail.regNo },
@@ -1089,7 +1089,7 @@ export function BusinessIncomeView() {
 
       {/* 소득 등록 다이얼로그 */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="!w-[58vw] !max-w-[58vw] max-h-[90vh] overflow-y-auto p-0">
+        <DialogContent className="w-[95vw] max-w-[95vw] sm:w-[85vw] sm:max-w-[85vw] md:w-[70vw] md:max-w-[70vw] lg:w-[58vw] lg:max-w-[58vw] max-h-[90vh] overflow-y-auto p-0">
           <DialogHeader className="px-6 pt-5 pb-4 border-b border-border">
             <DialogTitle className="text-lg font-bold">소득자 등록</DialogTitle>
           </DialogHeader>
@@ -1104,7 +1104,7 @@ export function BusinessIncomeView() {
               <div className="px-4 py-3 border-b border-border/60">
                 <p className="text-sm font-semibold text-foreground">기본 정보</p>
               </div>
-              <div className="p-4 grid grid-cols-2 gap-x-6 gap-y-3">
+              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                 <Field id="bi-name" label="소득자명" required value={form.name} onChange={(v) => set("name", v)} placeholder="홍길동" />
                 <Field id="bi-phone" label="전화번호" value={form.phone} onChange={(v) => set("phone", v)} placeholder="010-0000-0000" />
                 <Field id="bi-regno" label="주민번호" required value={form.regNo} onChange={(v) => set("regNo", v)} placeholder="000000-0000000" />
