@@ -52,19 +52,23 @@ function CategoryBadge({ category }: { category: string }) {
   return <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${style}`}>{category}</span>
 }
 
-const columns = [
-  { key: "category" as keyof Corporation,       label: "구분",           minWidth: "130px" },
-  { key: "name" as keyof Corporation,           label: "법인명",          minWidth: "140px" },
-  { key: "region" as keyof Corporation,         label: "지역",            minWidth: "120px" },
-  { key: "openDate" as keyof Corporation,       label: "개업일",          minWidth: "120px" },
-  { key: "bizNo" as keyof Corporation,          label: "사업자 번호",     minWidth: "130px" },
-  { key: "corpNo" as keyof Corporation,         label: "법인 번호",       minWidth: "140px" },
-  { key: "ceo" as keyof Corporation,            label: "법인 대표",       minWidth: "100px" },
-  { key: "bizAddress" as keyof Corporation,     label: "사업 소재지",     minWidth: "200px" },
-  { key: "registeredAt" as keyof Corporation,   label: "등록일",          minWidth: "110px" },
+type Column = { key: keyof Corporation; label: string; minWidth: string; sticky?: boolean }
+
+const columns: Column[] = [
+  { key: "category",    label: "구분",        minWidth: "130px", sticky: true },
+  { key: "intro",       label: "소개",        minWidth: "120px" },
+  { key: "name",        label: "법인명",      minWidth: "140px", sticky: true },
+  { key: "region",      label: "지역",        minWidth: "120px" },
+  { key: "openDate",    label: "개업일",      minWidth: "120px" },
+  { key: "startDate",   label: "개시일",      minWidth: "120px" },
+  { key: "bizNo",       label: "사업자 번호", minWidth: "130px" },
+  { key: "corpNo",      label: "법인 번호",   minWidth: "140px" },
+  { key: "ceo",         label: "법인 대표",   minWidth: "100px" },
+  { key: "bizAddress",  label: "사업 소재지", minWidth: "200px" },
+  { key: "registeredAt",label: "등록일",      minWidth: "110px" },
 ]
 
-const stickyOffsets = [0, 130]
+const stickyOffsets: Record<string, number> = { category: 0, name: 130 }
 
 export function ClosedCorporationsView() {
   const { rows, loading, error, changeStatus } = useCorporations()
@@ -134,16 +138,16 @@ export function ClosedCorporationsView() {
             <table className="w-full border-collapse text-sm">
               <thead className="sticky top-0 z-20">
                 <tr className="text-left text-muted-foreground">
-                  {columns.map((col, colIdx) => (
+                  {columns.map((col) => (
                     <th
                       key={col.key}
                       className={cn(
                         "border-b border-border bg-muted/70 px-3 py-2.5 align-middle font-medium backdrop-blur",
-                        colIdx < 2 && "sticky z-10",
+                        col.sticky && "sticky z-10",
                       )}
                       style={{
                         minWidth: col.minWidth,
-                        left: colIdx < 2 ? stickyOffsets[colIdx] : undefined,
+                        left: col.sticky ? stickyOffsets[col.key] : undefined,
                       }}
                     >
                       <Input
@@ -170,21 +174,21 @@ export function ClosedCorporationsView() {
                       className="group cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-accent/50"
                       onClick={() => setDetail(row)}
                     >
-                      {columns.map((col, colIdx) => (
+                      {columns.map((col) => (
                         <td
                           key={col.key}
                           className={cn(
                             "whitespace-nowrap px-3 py-2.5 text-foreground",
-                            colIdx < 2 && "sticky z-10 bg-card group-hover:bg-accent",
+                            col.sticky && "sticky z-10 bg-card group-hover:bg-accent",
                           )}
-                          style={{ left: colIdx < 2 ? stickyOffsets[colIdx] : undefined }}
+                          style={{ left: col.sticky ? stickyOffsets[col.key] : undefined }}
                         >
                           {col.key === "category" ? (
                             <CategoryBadge category={row.category} />
                           ) : col.key === "name" ? (
                             <span className="font-medium">{row.name}</span>
                           ) : (
-                            <span>{row[col.key] || "-"}</span>
+                            <span className={col.key === "intro" ? "text-muted-foreground" : ""}>{String(row[col.key] ?? "") || "-"}</span>
                           )}
                         </td>
                       ))}
@@ -212,8 +216,10 @@ export function ClosedCorporationsView() {
                     <DF label="상태"><StatusBadge status={detail.status} /></DF>
                     <DF label="폐업일" value={detail.closeDate} />
                     <DF label="법인명" value={detail.name} />
+                    <DF label="소개" value={detail.intro} className="col-span-2" />
                     <DF label="지역" value={detail.region} />
                     <DF label="개업일" value={detail.openDate} />
+                    <DF label="개시일" value={detail.startDate} />
                     <DF label="사업자 번호" value={detail.bizNo} />
                     <DF label="법인 번호" value={detail.corpNo} />
                   </ClosedSection>

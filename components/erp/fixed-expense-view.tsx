@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useEffect, useState, useCallback, useRef } from "react"
+import { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { Trash2, ChevronLeft, ChevronRight, Save, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -221,6 +221,20 @@ export function FixedExpenseView() {
     .filter((e) => e.year === year && e.month === month)
     .reduce((sum, e) => sum + e.amount, 0)
 
+  // 날짜 기준 오름차순 정렬 (1일 → 말일, 날짜 없는 항목은 맨 아래)
+  const sortedItems = useMemo(() => {
+    return [...items].sort((a, b) => {
+      const dateA = rowStates[a.id]?.entryDate ?? ""
+      const dateB = rowStates[b.id]?.entryDate ?? ""
+      if (!dateA && !dateB) return 0
+      if (!dateA) return 1
+      if (!dateB) return -1
+      const dayA = parseInt(dateA.slice(8, 10)) || 0
+      const dayB = parseInt(dateB.slice(8, 10)) || 0
+      return dayA - dayB
+    })
+  }, [items, rowStates])
+
   const hasChanges = items.some((item) => {
     const row = rowStates[item.id] ?? makeRowState()
     return row.entryDate.trim() !== "" || Number(row.amount.replace(/,/g, "")) > 0
@@ -301,8 +315,8 @@ export function FixedExpenseView() {
                 <th className="w-10 px-4 py-3 font-medium">
                   <input type="checkbox"
                     className="h-4 w-4 rounded border-border"
-                    checked={selectedIds.size === items.length && items.length > 0}
-                    onChange={(e) => setSelectedIds(e.target.checked ? new Set(items.map((i) => i.id)) : new Set())}
+                    checked={selectedIds.size === sortedItems.length && sortedItems.length > 0}
+                    onChange={(e) => setSelectedIds(e.target.checked ? new Set(sortedItems.map((i) => i.id)) : new Set())}
                   />
                 </th>
               )}
@@ -318,14 +332,14 @@ export function FixedExpenseView() {
               <tr>
                 <td colSpan={5} className="py-16 text-center text-muted-foreground">불러오는 중...</td>
               </tr>
-            ) : items.length === 0 ? (
+            ) : sortedItems.length === 0 ? (
               <tr>
                 <td colSpan={5} className="py-16 text-center text-muted-foreground">
                   위에서 항목을 추가하세요.
                 </td>
               </tr>
             ) : (
-              items.map((item) => {
+              sortedItems.map((item) => {
                 const row = rowStates[item.id] ?? makeRowState()
                 return (
                   <tr
