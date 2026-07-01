@@ -60,19 +60,49 @@ function CategoryBadge({ category }: { category: string }) {
   return <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${style}`}>{category}</span>
 }
 
+function parseDate(raw: string | undefined | null): string | null {
+  if (!raw) return null
+  const s = raw.trim()
+  if (!s) return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+  // 한국어 형식: 2025년09월17일, 2025년9월2일, 2026월 06월 23일(오타 포함)
+  const m = s.match(/(\d{4})[년월]\s*(\d{1,2})월\s*(\d{1,2})일/)
+  if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`
+  return null
+}
+
+function parseCategory(raw: string): string {
+  const v = (raw ?? "").trim()
+  const exact: Record<string, string> = {
+    "운영법인": "운영 법인", "운영 법인": "운영 법인",
+    "계약법인": "계약법인(영세)", "계약법인(영세)": "계약법인(영세)", "영세법인": "계약법인(영세)",
+    "하위법인": "하위 법인", "하위 법인": "하위 법인",
+    "상품권법인": "상품권 법인", "상품권 법인": "상품권 법인",
+  }
+  if (exact[v]) return exact[v]
+  if (v.includes("영세")) return "계약법인(영세)"
+  if (v.includes("하위")) return "하위 법인"
+  if (v.includes("상품권")) return "상품권 법인"
+  if (v.includes("운영")) return "운영 법인"
+  return "운영 법인"
+}
+
 type Column = {
   key: keyof Corporation
   label: string
   minWidth?: string
   filterOptions?: string[]
+  sticky?: boolean
 }
 
 const columns: Column[] = [
-  { key: "category", label: "구분", minWidth: "130px", filterOptions: CATEGORY_OPTIONS },
-  { key: "status", label: "상태", minWidth: "130px", filterOptions: STATUS_OPTIONS },
-  { key: "name", label: "법인명", minWidth: "140px" },
+  { key: "category", label: "구분", minWidth: "130px", filterOptions: CATEGORY_OPTIONS, sticky: true },
+  { key: "intro", label: "소개", minWidth: "120px" },
+  { key: "status", label: "상태", minWidth: "130px", filterOptions: STATUS_OPTIONS, sticky: true },
+  { key: "name", label: "법인명", minWidth: "140px", sticky: true },
   { key: "region", label: "지역", minWidth: "120px" },
   { key: "openDate", label: "개업일", minWidth: "120px" },
+  { key: "startDate", label: "개시일", minWidth: "120px" },
   { key: "bizNo", label: "사업자 번호", minWidth: "130px" },
   { key: "corpNo", label: "법인 번호", minWidth: "140px" },
   { key: "ceo", label: "법인 대표", minWidth: "100px" },
@@ -113,8 +143,18 @@ export function CorporationsView() {
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
-  // 좌측 고정(sticky) 열(구분/상태/법인명)의 누적 left 위치
-  const stickyOffsets = [0, 130, 260]
+  // 좌측 고정(sticky) 열의 누적 left 위치 (sticky: true 컬럼만)
+  const stickyOffsets = useMemo(() => {
+    const offsets: Record<string, number> = {}
+    let acc = 0
+    columns.forEach((col) => {
+      if (col.sticky) {
+        offsets[col.key as string] = acc
+        acc += parseInt(col.minWidth ?? "120", 10)
+      }
+    })
+    return offsets
+  }, [])
 
   async function handleBulkDelete() {
     setBulkDeleting(true)
@@ -241,10 +281,12 @@ export function CorporationsView() {
             templateName="법인"
             columns={[
               { key: "category", label: "구분", required: true, example: "운영 법인" },
+              { key: "intro", label: "소개", example: "주요 사업 내용" },
               { key: "name", label: "법인명", required: true, example: "한빛컴퍼니" },
               { key: "region", label: "지역", example: "서울" },
               { key: "openDate", label: "개업연월일", example: "2020-01-01" },
-              { key: "bizNo", label: "사업자번호", required: true, example: "123-81-45678" },
+              { key: "startDate", label: "개시일", example: "2020-03-01" },
+              { key: "bizNo", label: "사업자번호", example: "123-81-45678" },
               { key: "corpNo", label: "법인번호", example: "110111-1234567" },
               { key: "ceo", label: "법인대표", example: "홍길동" },
               { key: "auditorDirector", label: "감사/사내이사", example: "김감사" },
@@ -261,19 +303,21 @@ export function CorporationsView() {
                 const r = rows[i]
                 try {
                   await api.post("/api/corporations", {
-                    category: ({ "운영법인": "운영 법인", "운영 법인": "운영 법인", "계약법인": "계약법인(영세)", "계약법인(영세)": "계약법인(영세)", "하위법인": "하위 법인", "하위 법인": "하위 법인", "상품권법인": "상품권 법인", "상품권 법인": "상품권 법인" }[r.category?.trim()] ?? "운영 법인"),
+                    category: parseCategory(r.category),
+                    intro: r.intro || "",
                     name: r.name,
-                    bizNo: r.bizNo,
+                    bizNo: r.bizNo || "",
                     corpNo: r.corpNo || "",
                     ceo: r.ceo || "",
                     region: r.region || "",
-                    openDate: r.openDate || null,
+                    openDate: parseDate(r.openDate),
+                    startDate: parseDate(r.startDate),
                     auditorDirector: r.auditorDirector || "",
                     birthDate: r.birthDate || "",
-                    phone: (r.phone.match(/[\d]{2,4}[-\s]?\d{3,4}[-\s]?\d{4}/) ?? [""])[0].replace(/\s/g, "-"),
+                    phone: (r.phone?.match(/[\d]{2,4}[-\s]?\d{3,4}[-\s]?\d{4}/) ?? [""])[0].replace(/\s/g, "-"),
                     phonePlan: r.phonePlan || "",
                     bizAddress: r.bizAddress || "",
-                    bizEmail: (r.bizEmail.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/) ?? [""])[0],
+                    bizEmail: (r.bizEmail?.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/) ?? [""])[0],
                     status: "활성",
                     account: "", certCorp: "", iros: "", hometaxId: "", note: "",
                     shareholder: "",
@@ -315,16 +359,16 @@ export function CorporationsView() {
                       />
                     </th>
                   )}
-                  {columns.map((col, colIdx) => (
+                  {columns.map((col) => (
                     <th
                       key={col.key}
                       className={cn(
                         "border-b border-border bg-muted/70 px-3 py-2.5 align-middle font-medium backdrop-blur",
-                        colIdx < 3 && "sticky z-10",
+                        col.sticky && "sticky z-10",
                       )}
                       style={{
                         minWidth: col.minWidth,
-                        left: colIdx < 3 ? stickyOffsets[colIdx] : undefined,
+                        left: col.sticky ? stickyOffsets[col.key as string] : undefined,
                       }}
                     >
                       {col.filterOptions ? (
@@ -388,14 +432,14 @@ export function CorporationsView() {
                           />
                         </td>
                       )}
-                      {columns.map((col, colIdx) => (
+                      {columns.map((col) => (
                         <td
                           key={col.key}
                           className={cn(
                             "whitespace-nowrap px-3 py-2.5 text-foreground",
-                            colIdx < 3 && "sticky z-10 bg-card group-hover:bg-accent",
+                            col.sticky && "sticky z-10 bg-card group-hover:bg-accent",
                           )}
-                          style={{ left: colIdx < 3 ? stickyOffsets[colIdx] : undefined }}
+                          style={{ left: col.sticky ? stickyOffsets[col.key as string] : undefined }}
                         >
                           {col.key === "status" ? (
                             <div className="flex items-center gap-1.5">
@@ -518,6 +562,8 @@ export function CorporationsView() {
                             <SelectContent>{CATEGORY_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
                           </Select>
                         </div>
+                        <EF label="법인명" value={editForm.name} onChange={(v) => setEdit("name", v)} />
+                        <EF label="소개" value={editForm.intro} onChange={(v) => setEdit("intro", v)} />
                         <div className="flex flex-col gap-1.5">
                           <Label className="text-xs text-muted-foreground">상태</Label>
                           <Select value={editForm.status} onValueChange={(v) => setEdit("status", v ?? "")}>
@@ -531,15 +577,17 @@ export function CorporationsView() {
                         {editForm.status === "폐업" && (
                           <EF label="폐업일" type="date" value={editForm.closeDate} onChange={(v) => setEdit("closeDate", v)} />
                         )}
-                        <EF label="법인명" value={editForm.name} onChange={(v) => setEdit("name", v)} />
                         <EF label="지역" value={editForm.region} onChange={(v) => setEdit("region", v)} />
                         <EF label="개업일" type="date" value={editForm.openDate} onChange={(v) => setEdit("openDate", v)} />
+                        <EF label="개시일" type="date" value={editForm.startDate} onChange={(v) => setEdit("startDate", v)} />
                         <EF label="사업자 번호" value={editForm.bizNo} onChange={(v) => setEdit("bizNo", v)} />
                         <EF label="법인 번호" value={editForm.corpNo} onChange={(v) => setEdit("corpNo", v)} />
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
                         <DetailField label="구분"><CategoryBadge category={detail.category} /></DetailField>
+                        <DetailField label="법인명" value={detail.name} />
+                        <DetailField label="소개" value={detail.intro} />
                         <DetailField label="상태">
                           <div className="flex items-center gap-1.5">
                             <StatusBadge status={detail.status} />
@@ -559,9 +607,9 @@ export function CorporationsView() {
                         {detail.status === "폐업" && (
                           <DetailField label="폐업일" value={detail.closeDate} />
                         )}
-                        <DetailField label="법인명" value={detail.name} />
                         <DetailField label="지역" value={detail.region} />
                         <DetailField label="개업일" value={detail.openDate} />
+                        <DetailField label="개시일" value={detail.startDate} />
                         <DetailField label="사업자 번호" value={detail.bizNo} />
                         <DetailField label="법인 번호" value={detail.corpNo} />
                       </div>

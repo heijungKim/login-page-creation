@@ -12,6 +12,8 @@ type CorporationResponse = {
   name: string
   region: string
   openDate: string | null
+  startDate: string | null
+  intro: string
   bizNo: string
   corpNo: string
   ceo: string
@@ -94,6 +96,8 @@ function fromResponse(r: CorporationResponse): Corporation {
     name: r.name,
     region: r.region,
     openDate: r.openDate ?? "",
+    startDate: r.startDate ?? "",
+    intro: r.intro ?? "",
     bizNo: r.bizNo,
     corpNo: r.corpNo,
     ceo: r.ceo,
@@ -129,6 +133,8 @@ function toRequest(c: Corporation) {
     name: c.name,
     region: c.region,
     openDate: c.openDate || null,
+    startDate: c.startDate || null,
+    intro: c.intro || "",
     bizNo: c.bizNo,
     corpNo: c.corpNo,
     ceo: c.ceo,

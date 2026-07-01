@@ -33,8 +33,10 @@ export type Corporation = {
   category: string
   status: string
   name: string
+  intro: string
   region: string
   openDate: string
+  startDate: string
   bizNo: string
   corpNo: string
   ceo: string
@@ -71,8 +73,10 @@ const emptyForm: Corporation = {
   category: "운영 법인",
   status: "활성",
   name: "",
+  intro: "",
   region: "",
   openDate: "",
+  startDate: "",
   bizNo: "",
   corpNo: "",
   ceo: "",
@@ -303,6 +307,7 @@ export function CorporationFormDialog({
                 </Select>
               </div>
               <Field id="name" label="법인명" value={form.name} onChange={(v) => set("name", v)} placeholder="예: 한빛컴퍼니" required error={fieldErrors.name} />
+              <Field id="intro" label="소개" value={form.intro} onChange={(v) => set("intro", v)} placeholder="법인 소개" />
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="status" className="text-xs text-muted-foreground">상태</Label>
                 <Select value={form.status} onValueChange={(v) => set("status", v)}>
@@ -320,6 +325,7 @@ export function CorporationFormDialog({
               )}
               <Field id="region" label="지역" value={form.region} onChange={(v) => set("region", v)} placeholder="예: 서울 강남구" />
               <Field id="openDate" label="개업일" type="date" value={form.openDate} onChange={(v) => set("openDate", v)} />
+              <Field id="startDate" label="개시일" type="date" value={form.startDate} onChange={(v) => set("startDate", v)} />
               <Field id="bizNo" label="사업자 번호" value={form.bizNo} onChange={(v) => set("bizNo", v)} placeholder="000-00-00000" required error={fieldErrors.bizNo} />
               <Field id="corpNo" label="법인 번호" value={form.corpNo} onChange={(v) => set("corpNo", v)} placeholder="000000-0000000" required error={fieldErrors.corpNo} />
             </Section>

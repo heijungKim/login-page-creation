@@ -207,7 +207,7 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
       </Button>
 
       <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
-        <DialogContent className="max-w-4xl flex flex-col max-h-[90vh]">
+        <DialogContent className="max-w-6xl flex flex-col max-h-[92vh]">
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-base">엑셀 업로드 — {templateName}</DialogTitle>
           </DialogHeader>
