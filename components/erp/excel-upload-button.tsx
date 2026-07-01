@@ -26,6 +26,26 @@ export type ExcelColumn = {
 
 type UploadResult = { success: number; failed: Array<{ row: number; reason: string }> }
 
+// rowIndex → colKey → error message
+type CellErrors = Record<number, Record<string, string>>
+
+function validateRows(rows: Record<string, string>[], columns: ExcelColumn[]): CellErrors {
+  const errors: CellErrors = {}
+  rows.forEach((row, i) => {
+    columns.forEach((col) => {
+      const val = (row[col.key] ?? "").trim()
+      if (col.required && !val) {
+        if (!errors[i]) errors[i] = {}
+        errors[i][col.key] = "필수 항목"
+      } else if (col.options?.length && val && !col.options.includes(val)) {
+        if (!errors[i]) errors[i] = {}
+        errors[i][col.key] = `허용값: ${col.options.join(" / ")}`
+      }
+    })
+  })
+  return errors
+}
+
 type Props = {
   templateName: string
   columns: ExcelColumn[]
@@ -39,7 +59,12 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState<UploadResult | null>(null)
   const [parseError, setParseError] = useState<string | null>(null)
+  const [cellErrors, setCellErrors] = useState<CellErrors>({})
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const errorRowCount = Object.keys(cellErrors).length
+  const totalErrorCount = Object.values(cellErrors).reduce((sum, cols) => sum + Object.keys(cols).length, 0)
+  const hasErrors = errorRowCount > 0
 
   function handleClose() {
     setOpen(false)
@@ -47,6 +72,7 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
     setFileName("")
     setResult(null)
     setParseError(null)
+    setCellErrors({})
     if (fileRef.current) fileRef.current.value = ""
   }
 
@@ -83,6 +109,7 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
     setFileName(file.name)
     setParseError(null)
     setResult(null)
+    setCellErrors({})
 
     const reader = new FileReader()
     reader.onload = (ev) => {
@@ -140,7 +167,9 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
           return
         }
 
+        const errors = validateRows(rows, columns)
         setPreview(rows)
+        setCellErrors(errors)
       } catch {
         setParseError("파일을 읽을 수 없습니다. 올바른 엑셀 파일인지 확인해주세요.")
       }
@@ -149,7 +178,7 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
   }
 
   async function handleUpload() {
-    if (preview.length === 0) return
+    if (preview.length === 0 || hasErrors) return
     setUploading(true)
     setResult(null)
     suppressUnauthorizedRedirect(true)
@@ -158,6 +187,7 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
       setResult(res)
       setPreview([])
       setFileName("")
+      setCellErrors({})
       if (fileRef.current) fileRef.current.value = ""
     } catch (e) {
       setResult({ success: 0, failed: [{ row: 0, reason: e instanceof Error ? e.message : "업로드 중 오류가 발생했습니다." }] })
@@ -218,7 +248,7 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
                 {fileName && (
                   <div className="flex items-center gap-1.5 text-xs text-foreground">
                     <span className="truncate max-w-[200px]">{fileName}</span>
-                    <button onClick={() => { setFileName(""); setPreview([]); setParseError(null); if (fileRef.current) fileRef.current.value = "" }}>
+                    <button onClick={() => { setFileName(""); setPreview([]); setParseError(null); setCellErrors({}); if (fileRef.current) fileRef.current.value = "" }}>
                       <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
                     </button>
                   </div>
@@ -237,12 +267,21 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
               <div className="rounded-lg border border-border overflow-hidden">
                 <div className="px-4 py-2.5 bg-muted/40 border-b border-border flex items-center justify-between">
                   <p className="text-xs font-semibold text-foreground">미리보기 ({preview.length}행)</p>
-                  <p className="text-xs text-muted-foreground">최대 5행 표시</p>
+                  <div className="flex items-center gap-3">
+                    {hasErrors && (
+                      <span className="flex items-center gap-1 text-xs font-medium text-destructive">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        {errorRowCount}행 {totalErrorCount}개 항목 오류 — 수정 후 업로드 가능
+                      </span>
+                    )}
+                    <p className="text-xs text-muted-foreground">최대 5행 표시</p>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-border bg-muted/20">
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap w-8">#</th>
                         {columns.map((c) => (
                           <th key={c.key} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">
                             {c.label}{c.required && <span className="text-destructive ml-0.5">*</span>}
@@ -251,21 +290,53 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/50">
-                      {preview.slice(0, 5).map((row, i) => (
-                        <tr key={i} className={i % 2 === 1 ? "bg-muted/10" : ""}>
-                          {columns.map((c) => (
-                            <td key={c.key} className="px-3 py-1.5 text-foreground whitespace-nowrap max-w-[120px] truncate">
-                              {row[c.key] || <span className="text-muted-foreground/50">-</span>}
+                      {preview.slice(0, 5).map((row, i) => {
+                        const rowHasError = !!cellErrors[i]
+                        return (
+                          <tr key={i} className={cn(
+                            i % 2 === 1 ? "bg-muted/10" : "",
+                            rowHasError ? "bg-red-50/60" : ""
+                          )}>
+                            <td className={cn(
+                              "px-3 py-1.5 text-center font-medium whitespace-nowrap",
+                              rowHasError ? "text-destructive" : "text-muted-foreground"
+                            )}>
+                              {i + 2}
                             </td>
-                          ))}
-                        </tr>
-                      ))}
+                            {columns.map((c) => {
+                              const err = cellErrors[i]?.[c.key]
+                              return (
+                                <td
+                                  key={c.key}
+                                  title={err}
+                                  className={cn(
+                                    "px-3 py-1.5 whitespace-nowrap max-w-[120px]",
+                                    err
+                                      ? "bg-red-100 text-red-700 font-medium"
+                                      : "text-foreground"
+                                  )}
+                                >
+                                  <span className="block truncate">
+                                    {row[c.key] || <span className="text-muted-foreground/50">-</span>}
+                                  </span>
+                                  {err && (
+                                    <span className="block text-[10px] text-red-500 leading-tight truncate">
+                                      {err}
+                                    </span>
+                                  )}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
                 {preview.length > 5 && (
                   <p className="px-4 py-2 text-xs text-muted-foreground border-t border-border">
                     외 {preview.length - 5}행 더 있음
+                    {errorRowCount > 0 && ` (전체 ${errorRowCount}행 오류 포함)`}
                   </p>
                 )}
               </div>
@@ -304,10 +375,16 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
             <Button variant="outline" onClick={handleClose}>닫기</Button>
             <Button
               onClick={handleUpload}
-              disabled={preview.length === 0 || uploading}
+              disabled={preview.length === 0 || uploading || hasErrors}
               className="gap-1.5 min-w-[80px]"
+              title={hasErrors ? `${errorRowCount}행의 오류를 수정해야 업로드할 수 있습니다` : undefined}
             >
-              {uploading ? <><Loader2 className="h-4 w-4 animate-spin" />업로드 중...</> : `${preview.length}건 업로드`}
+              {uploading
+                ? <><Loader2 className="h-4 w-4 animate-spin" />업로드 중...</>
+                : hasErrors
+                  ? <><AlertCircle className="h-4 w-4" />{errorRowCount}행 오류</>
+                  : `${preview.length}건 업로드`
+              }
             </Button>
           </DialogFooter>
         </DialogContent>
