@@ -321,9 +321,9 @@ export function FixedExpenseView() {
                 </th>
               )}
               <th className="px-4 py-3 font-medium w-[150px]">날짜</th>
-              <th className="px-4 py-3 font-medium w-[180px]">항목명</th>
+              <th className="px-4 py-3 font-medium w-[280px]">항목명</th>
               <th className="px-4 py-3 font-medium w-[150px]">금액 (원)</th>
-              <th className="px-4 py-3 font-medium">메모</th>
+              <th className="px-4 py-3 font-medium w-[160px]">메모</th>
               <th className="px-4 py-3 w-[48px]" />
             </tr>
           </thead>
