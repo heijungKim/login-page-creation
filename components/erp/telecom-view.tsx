@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Plus, Trash2 } from "lucide-react"
+import { Pencil, Plus, Trash2 } from "lucide-react"
 import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -230,6 +230,10 @@ export function TelecomView() {
   const [paymentsLoading, setPaymentsLoading] = useState(false)
   const [payForm, setPayForm] = useState({ paidDate: "", paidAmount: "", memo: "" })
   const [paySubmitting, setPaySubmitting] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [editForm, setEditForm] = useState<FormData>(emptyForm)
+  const [editSubmitting, setEditSubmitting] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
 
   const setFilter = (k: string, v: string) => setFilters((p) => ({ ...p, [k]: v }))
   const [bulkMode, setBulkMode] = useState(false)
@@ -282,8 +286,51 @@ export function TelecomView() {
 
   function openDetail(row: Telecom) {
     setDetail(row)
+    setEditMode(false)
+    setEditError(null)
     setPayForm({ paidDate: "", paidAmount: toCommaNumber(String(Math.round(row.cost))), memo: "" })
     void loadPayments(row.id)
+  }
+
+  function startEdit() {
+    if (!detail) return
+    setEditForm({
+      owner: detail.owner,
+      phone: detail.phone,
+      carrier: detail.carrier,
+      cost: toCommaNumber(String(Math.round(detail.cost))),
+      paymentDay: detail.paymentDay,
+      bankName: detail.bankName,
+      accountNo: detail.accountNo,
+      memo: detail.memo,
+    })
+    setEditError(null)
+    setEditMode(true)
+  }
+
+  async function handleEdit() {
+    if (!detail) return
+    setEditSubmitting(true)
+    setEditError(null)
+    try {
+      const updated = await api.put<Telecom>(`/api/telecoms/${detail.id}`, {
+        owner: editForm.owner,
+        phone: editForm.phone,
+        carrier: editForm.carrier,
+        cost: Number(editForm.cost.replace(/,/g, "")) || 0,
+        paymentDay: editForm.paymentDay,
+        bankName: editForm.bankName,
+        accountNo: editForm.accountNo,
+        memo: editForm.memo,
+      })
+      setDetail(updated)
+      setEditMode(false)
+      await refresh()
+    } catch (err) {
+      setEditError(err instanceof ApiError ? err.message : "수정에 실패했습니다.")
+    } finally {
+      setEditSubmitting(false)
+    }
   }
 
   async function addPayment() {
@@ -560,6 +607,41 @@ export function TelecomView() {
             <>
               <div className="flex max-h-[calc(90svh-9rem)] flex-col overflow-y-auto px-6 py-5">
                 <div className="flex flex-col gap-5">
+                  {editMode ? (
+                    <div className="flex flex-col gap-4">
+                      {editError && (
+                        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{editError}</div>
+                      )}
+                      <div className="grid grid-cols-2 gap-4">
+                        <Field id="edit-owner" label="명의자" value={editForm.owner} onChange={(v) => setEditForm((p) => ({ ...p, owner: v }))} placeholder="예: 김대표" />
+                        <Field id="edit-phone" label="연락처" value={editForm.phone} onChange={(v) => setEditForm((p) => ({ ...p, phone: v }))} placeholder="010-0000-0000" />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="edit-carrier" className="text-xs text-muted-foreground">통신사</Label>
+                        <Select value={editForm.carrier} onValueChange={(v) => setEditForm((p) => ({ ...p, carrier: v }))}>
+                          <SelectTrigger id="edit-carrier"><span>{editForm.carrier}</span></SelectTrigger>
+                          <SelectContent>
+                            {CARRIER_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <Field id="edit-cost" label="통신비용 (원)" value={editForm.cost} onChange={(v) => setEditForm((p) => ({ ...p, cost: toCommaNumber(v) }))} placeholder="예: 89,000" />
+                        <Field id="edit-payment-day" label="납부일" value={editForm.paymentDay} onChange={(v) => setEditForm((p) => ({ ...p, paymentDay: v }))} placeholder="예: 매월 25일" />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <p className="text-xs font-medium text-muted-foreground">지급 계좌</p>
+                        <div className="grid grid-cols-2 gap-4 rounded-lg border border-border p-3">
+                          <Field id="edit-bank" label="은행명" value={editForm.bankName} onChange={(v) => setEditForm((p) => ({ ...p, bankName: v }))} placeholder="예: 국민" />
+                          <Field id="edit-account" label="계좌번호" value={editForm.accountNo} onChange={(v) => setEditForm((p) => ({ ...p, accountNo: v }))} placeholder="예: 123-456-789012" />
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="edit-memo" className="text-xs text-muted-foreground">비고</Label>
+                        <Textarea id="edit-memo" value={editForm.memo} onChange={(e) => setEditForm((p) => ({ ...p, memo: e.target.value }))} placeholder="추가 메모를 입력하세요" rows={3} />
+                      </div>
+                    </div>
+                  ) : (
                   <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[11px] text-muted-foreground">명의자</span>
@@ -592,6 +674,7 @@ export function TelecomView() {
                       </div>
                     )}
                   </div>
+                  )}
 
                   <div className="rounded-lg border border-border p-4">
                     <div className="mb-3">
@@ -654,7 +737,21 @@ export function TelecomView() {
                 </div>
               </div>
               <DialogFooter className="border-t border-border px-6 py-5">
-                <Button variant="outline" onClick={() => setDetail(null)}>닫기</Button>
+                {editMode ? (
+                  <>
+                    <Button variant="outline" disabled={editSubmitting} onClick={() => { setEditMode(false); setEditError(null) }}>취소</Button>
+                    <Button disabled={editSubmitting} onClick={handleEdit}>
+                      {editSubmitting ? "저장 중..." : "저장"}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="outline" className="gap-1.5" onClick={startEdit}>
+                      <Pencil className="h-3.5 w-3.5" />수정
+                    </Button>
+                    <Button variant="outline" onClick={() => setDetail(null)}>닫기</Button>
+                  </>
+                )}
               </DialogFooter>
             </>
           )}
