@@ -15,6 +15,7 @@ type LeaseEntry = {
   id: number
   corporationId: number | null
   category: string
+  categoryNote: string | null
   corpName: string
   ceoName: string
   location: string
@@ -154,10 +155,11 @@ function SelectField({ id, label, value, onChange, options }: {
   )
 }
 
-function CategoryBadge({ category }: { category: string }) {
+function CategoryBadge({ category, categoryNote }: { category: string; categoryNote?: string | null }) {
+  const label = category === "기타" && categoryNote ? `기타(${categoryNote})` : category
   return (
     <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", categoryStyles[category] ?? "bg-muted text-muted-foreground")}>
-      {category}
+      {label}
     </span>
   )
 }
@@ -327,8 +329,12 @@ export function LeaseView() {
               for (let i = 0; i < rows.length; i++) {
                 const r = rows[i]
                 try {
+                  const knownCategories = ["운영법인", "하위법인", "상품권 법인", "영세 법인", "기타"]
+                  const isKnown = knownCategories.includes(r.category)
                   await api.post("/api/leases", {
-                    category: r.category, corpName: r.corpName || "", ceoName: r.ceoName,
+                    category: isKnown ? r.category : "기타",
+                    categoryNote: !isKnown && r.category ? r.category : null,
+                    corpName: r.corpName || "", ceoName: r.ceoName,
                     location: r.location || "", contractStart: r.contractStart || null, contractEnd: r.contractEnd || null,
                     deposit: Number(r.deposit.replace(/,/g, "")) || 0,
                     monthlyRent: Number(r.monthlyRent.replace(/,/g, "")) || 0,
@@ -446,7 +452,7 @@ export function LeaseView() {
                           )}
                           style={{ left: colIdx < 2 ? stickyOffsets[colIdx] : undefined }}
                         >
-                          {col.key === "category" && <CategoryBadge category={row.category} />}
+                          {col.key === "category" && <CategoryBadge category={row.category} categoryNote={row.categoryNote} />}
                           {col.key === "corpName" && <span className="font-medium">{row.corpName}</span>}
                           {col.key === "status" && <StatusBadge status={row.status} />}
                           {col.key === "deposit" && <span className="tabular-nums">{fmt(row.deposit)}</span>}
@@ -527,7 +533,7 @@ export function LeaseView() {
                     ].map(({ label, value, isCat, isStat }) => (
                       <div key={label} className="flex gap-2">
                         <span className="w-28 shrink-0 text-muted-foreground">{label}</span>
-                        {isCat ? <CategoryBadge category={value} /> :
+                        {isCat ? <CategoryBadge category={value} categoryNote={detail.categoryNote} /> :
                           isStat ? <StatusBadge status={value} /> :
                             <span className="font-medium text-foreground">{value}</span>}
                       </div>
