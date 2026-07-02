@@ -225,10 +225,14 @@ export function LeaseView() {
       )
       .sort((a, b) => {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+        const ra = a.registeredAt ?? ""
+        const rb = b.registeredAt ?? ""
+        if (ra !== rb) return rb.localeCompare(ra)
+        const catIdx = (c: string) => { const i = CATEGORY_OPTIONS.indexOf(c); return i === -1 ? 999 : i }
+        if (a.category !== b.category) return catIdx(a.category) - catIdx(b.category)
         const ca = a.contractStart ?? ""
         const cb = b.contractStart ?? ""
-        if (ca !== cb) return cb.localeCompare(ca)
-        return (b.registeredAt ?? "").localeCompare(a.registeredAt ?? "")
+        return cb.localeCompare(ca)
       }),
     [rows, filters])
 
