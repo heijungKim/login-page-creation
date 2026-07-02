@@ -304,9 +304,9 @@ export function LeaseView() {
             templateName="임대차"
             columns={[
               { key: "category", label: "구분", required: true, example: "운영법인" },
-              { key: "corpName", label: "법인명", required: true, example: "한빛컴퍼니" },
-              { key: "ceoName", label: "대표자명", example: "홍길동" },
-              { key: "location", label: "소재지", required: true, example: "서울시 강남구 테헤란로 123" },
+              { key: "corpName", label: "법인명", example: "한빛컴퍼니" },
+              { key: "ceoName", label: "대표자명", required: true, example: "홍길동" },
+              { key: "location", label: "소재지", example: "서울시 강남구 테헤란로 123" },
               { key: "contractStart", label: "계약시작일", example: "2025-01-01" },
               { key: "contractEnd", label: "계약종료일", example: "2027-12-31" },
               { key: "deposit", label: "보증금", example: "50000000" },
@@ -323,8 +323,8 @@ export function LeaseView() {
                 const r = rows[i]
                 try {
                   await api.post("/api/leases", {
-                    category: r.category, corpName: r.corpName, ceoName: r.ceoName || "",
-                    location: r.location, contractStart: r.contractStart || null, contractEnd: r.contractEnd || null,
+                    category: r.category, corpName: r.corpName || "", ceoName: r.ceoName,
+                    location: r.location || "", contractStart: r.contractStart || null, contractEnd: r.contractEnd || null,
                     deposit: Number(r.deposit.replace(/,/g, "")) || 0,
                     monthlyRent: Number(r.monthlyRent.replace(/,/g, "")) || 0,
                     paymentDay: r.paymentDay || "", contact: r.contact || "",
