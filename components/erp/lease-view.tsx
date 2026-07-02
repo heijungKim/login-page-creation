@@ -24,6 +24,7 @@ type LeaseEntry = {
   monthlyRent: number
   paymentDay: string
   contact: string
+  emergencyContact: string
   sharedOfficeName: string | null
   status: string
   registeredAt: string
@@ -66,6 +67,7 @@ const columns = [
   { key: "monthlyRent", label: "월 납입금", minWidth: "130px" },
   { key: "paymentDay", label: "납입일", minWidth: "90px" },
   { key: "contact", label: "연락처", minWidth: "130px" },
+  { key: "emergencyContact", label: "긴급 연락처", minWidth: "130px" },
   { key: "sharedOfficeName", label: "공유오피스 상호명", minWidth: "170px" },
   { key: "status", label: "상태", minWidth: "100px" },
   { key: "registeredAt", label: "등록일", minWidth: "110px" },
@@ -80,13 +82,13 @@ const BADGE_KEYS = ["category", "corpName", "status", "deposit", "monthlyRent", 
 type FormData = {
   category: string; corpName: string; ceoName: string; location: string
   contractStart: string; contractEnd: string; deposit: string; monthlyRent: string
-  paymentDay: string; contact: string; sharedOfficeName: string; status: string
+  paymentDay: string; contact: string; emergencyContact: string; sharedOfficeName: string; status: string
 }
 
 const emptyForm: FormData = {
   category: "운영법인", corpName: "", ceoName: "", location: "",
   contractStart: "", contractEnd: "", deposit: "", monthlyRent: "",
-  paymentDay: "", contact: "", sharedOfficeName: "", status: "계약중",
+  paymentDay: "", contact: "", emergencyContact: "", sharedOfficeName: "", status: "계약중",
 }
 
 function toRequest(form: FormData) {
@@ -101,6 +103,7 @@ function toRequest(form: FormData) {
     monthlyRent: Number(form.monthlyRent.replace(/,/g, "")) || 0,
     paymentDay: form.paymentDay,
     contact: form.contact,
+    emergencyContact: form.emergencyContact,
     sharedOfficeName: form.sharedOfficeName || null,
     status: form.status,
   }
@@ -116,6 +119,7 @@ function toFormData(row: LeaseEntry): FormData {
     monthlyRent: row.monthlyRent ? row.monthlyRent.toLocaleString("ko-KR") : "",
     paymentDay: row.paymentDay ?? "",
     contact: row.contact,
+    emergencyContact: row.emergencyContact ?? "",
     sharedOfficeName: row.sharedOfficeName ?? "",
     status: row.status,
   }
@@ -313,6 +317,7 @@ export function LeaseView() {
               { key: "monthlyRent", label: "월납입금", example: "3200000" },
               { key: "paymentDay", label: "납입일", example: "5" },
               { key: "contact", label: "연락처", example: "010-1234-5678" },
+              { key: "emergencyContact", label: "긴급연락처", example: "010-9876-5432" },
               { key: "sharedOfficeName", label: "공유오피스상호", example: "" },
               { key: "status", label: "상태", example: "계약중" },
             ] satisfies ExcelColumn[]}
@@ -328,6 +333,7 @@ export function LeaseView() {
                     deposit: Number(r.deposit.replace(/,/g, "")) || 0,
                     monthlyRent: Number(r.monthlyRent.replace(/,/g, "")) || 0,
                     paymentDay: r.paymentDay || "", contact: r.contact || "",
+                    emergencyContact: r.emergencyContact || "",
                     sharedOfficeName: r.sharedOfficeName || "", status: r.status || "계약중",
                   })
                   success++
@@ -504,6 +510,7 @@ export function LeaseView() {
                       <Field id="d-corpName" label="법인명" value={detailForm.corpName} onChange={(v) => setDetailField("corpName", v)} />
                       <Field id="d-ceoName" label="대표자명" value={detailForm.ceoName} onChange={(v) => setDetailField("ceoName", v)} />
                       <Field id="d-contact" label="연락처" value={detailForm.contact} onChange={(v) => setDetailField("contact", v)} />
+                      <Field id="d-emergency-contact" label="긴급 연락처" value={detailForm.emergencyContact} onChange={(v) => setDetailField("emergencyContact", v)} />
                       <Field id="d-shared" label="공유오피스 상호명" value={detailForm.sharedOfficeName} onChange={(v) => setDetailField("sharedOfficeName", v)} placeholder="해당 없으면 비워두세요" />
                       <SelectField id="d-status" label="상태" value={detailForm.status} onChange={(v) => setDetailField("status", v)} options={STATUS_OPTIONS} />
                     </>
@@ -513,6 +520,7 @@ export function LeaseView() {
                       { label: "법인명", value: detail.corpName },
                       { label: "대표자명", value: detail.ceoName },
                       { label: "연락처", value: detail.contact },
+                      { label: "긴급 연락처", value: detail.emergencyContact || "-" },
                       { label: "공유오피스 상호명", value: detail.sharedOfficeName || "-" },
                       { label: "상태", value: detail.status, isStat: true },
                       { label: "등록일", value: detail.registeredAt },
@@ -603,6 +611,7 @@ export function LeaseView() {
                 <Field id="r-corpName" label="법인명 *" value={form.corpName} onChange={(v) => set("corpName", v)} placeholder="법인명 입력" />
                 <Field id="r-ceoName" label="대표자명" value={form.ceoName} onChange={(v) => set("ceoName", v)} placeholder="홍길동" />
                 <Field id="r-contact" label="연락처" value={form.contact} onChange={(v) => set("contact", v)} placeholder="010-0000-0000" />
+                <Field id="r-emergency-contact" label="긴급 연락처" value={form.emergencyContact} onChange={(v) => set("emergencyContact", v)} placeholder="010-0000-0000" />
                 <Field id="r-shared" label="공유오피스 상호명" value={form.sharedOfficeName} onChange={(v) => set("sharedOfficeName", v)} placeholder="해당 없으면 비워두세요" />
                 <SelectField id="r-status" label="상태" value={form.status} onChange={(v) => set("status", v)} options={STATUS_OPTIONS} />
               </div>
