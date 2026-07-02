@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Plus } from "lucide-react"
+import { Pin, Plus } from "lucide-react"
 import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -27,6 +27,7 @@ type LeaseEntry = {
   contact: string
   emergencyContact: string
   sharedOfficeName: string | null
+  pinned: boolean
   status: string
   registeredAt: string
 }
@@ -83,13 +84,13 @@ const BADGE_KEYS = ["category", "corpName", "status", "deposit", "monthlyRent", 
 type FormData = {
   category: string; corpName: string; ceoName: string; location: string
   contractStart: string; contractEnd: string; deposit: string; monthlyRent: string
-  paymentDay: string; contact: string; emergencyContact: string; sharedOfficeName: string; status: string
+  paymentDay: string; contact: string; emergencyContact: string; sharedOfficeName: string; pinned: boolean; status: string
 }
 
 const emptyForm: FormData = {
   category: "운영법인", corpName: "", ceoName: "", location: "",
   contractStart: "", contractEnd: "", deposit: "", monthlyRent: "",
-  paymentDay: "", contact: "", emergencyContact: "", sharedOfficeName: "", status: "계약중",
+  paymentDay: "", contact: "", emergencyContact: "", sharedOfficeName: "", pinned: false, status: "계약중",
 }
 
 function toRequest(form: FormData) {
@@ -106,6 +107,7 @@ function toRequest(form: FormData) {
     contact: form.contact,
     emergencyContact: form.emergencyContact,
     sharedOfficeName: form.sharedOfficeName || null,
+    pinned: form.pinned,
     status: form.status,
   }
 }
@@ -122,6 +124,7 @@ function toFormData(row: LeaseEntry): FormData {
     contact: row.contact,
     emergencyContact: row.emergencyContact ?? "",
     sharedOfficeName: row.sharedOfficeName ?? "",
+    pinned: row.pinned ?? false,
     status: row.status,
   }
 }
@@ -220,7 +223,13 @@ export function LeaseView() {
           return String(value ?? "").toLowerCase().includes(term)
         })
       )
-      .sort((a, b) => (b.registeredAt ?? "").localeCompare(a.registeredAt ?? "")),
+      .sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+        const ca = a.contractStart ?? ""
+        const cb = b.contractStart ?? ""
+        if (ca !== cb) return cb.localeCompare(ca)
+        return (b.registeredAt ?? "").localeCompare(a.registeredAt ?? "")
+      }),
     [rows, filters])
 
   async function handleSubmit() {
@@ -282,6 +291,20 @@ export function LeaseView() {
   function resetDetail(row: LeaseEntry) {
     setDetailForm(toFormData(row))
     setEditMode(false)
+  }
+
+  async function togglePin(row: LeaseEntry) {
+    const newPinned = !row.pinned
+    try {
+      const updated = await api.put<LeaseEntry>(`/api/leases/${row.id}`, {
+        ...toRequest(toFormData(row)),
+        pinned: newPinned,
+      })
+      setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)))
+      setDetail(updated)
+    } catch {
+      // ignore
+    }
   }
 
   return (
@@ -452,7 +475,12 @@ export function LeaseView() {
                           )}
                           style={{ left: colIdx < 2 ? stickyOffsets[colIdx] : undefined }}
                         >
-                          {col.key === "category" && <CategoryBadge category={row.category} categoryNote={row.categoryNote} />}
+                          {col.key === "category" && (
+                            <span className="flex items-center gap-1">
+                              {row.pinned && <Pin className="h-3 w-3 fill-amber-500 text-amber-500 shrink-0" />}
+                              <CategoryBadge category={row.category} categoryNote={row.categoryNote} />
+                            </span>
+                          )}
                           {col.key === "corpName" && <span className="font-medium">{row.corpName}</span>}
                           {col.key === "status" && <StatusBadge status={row.status} />}
                           {col.key === "deposit" && <span className="tabular-nums">{fmt(row.deposit)}</span>}
@@ -490,7 +518,21 @@ export function LeaseView() {
       <Dialog open={!!detail} onOpenChange={(o) => { if (!o) { setDetail(null); setEditMode(false); setSubmitError(null) } }}>
         <DialogContent className="!w-[50vw] !max-w-[50vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>임대차 상세 정보</DialogTitle>
+            <div className="flex items-center justify-between pr-6">
+              <DialogTitle>임대차 상세 정보</DialogTitle>
+              {detail && (
+                <label className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
+                  <Pin className={cn("h-3.5 w-3.5", detail.pinned ? "fill-amber-500 text-amber-500" : "text-muted-foreground")} />
+                  <input
+                    type="checkbox"
+                    checked={detail.pinned}
+                    onChange={() => togglePin(detail)}
+                    className="h-3.5 w-3.5 accent-amber-500"
+                  />
+                  <span className={detail.pinned ? "font-medium text-amber-600" : "text-muted-foreground"}>고정</span>
+                </label>
+              )}
+            </div>
           </DialogHeader>
           {detail && (
             <div className="flex flex-col gap-4 py-2">
