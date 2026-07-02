@@ -353,8 +353,8 @@ export function LeaseView() {
                 const r = rows[i]
                 try {
                   const knownCategories = ["운영법인", "하위법인", "상품권 법인", "영세 법인", "기타"]
-                  const normalize = (s: string) => s.replace(/\s+/g, "").toLowerCase()
-                  const matched = knownCategories.find((k) => normalize(k) === normalize(r.category))
+                  const normalize = (s: string) => s.normalize("NFC").replace(/\s+/g, "").toLowerCase()
+                  const matched = knownCategories.find((k) => normalize(k) === normalize(r.category ?? ""))
                   await api.post("/api/leases", {
                     category: matched ?? "기타",
                     categoryNote: !matched && r.category ? r.category : null,
