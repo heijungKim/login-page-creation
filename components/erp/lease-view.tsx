@@ -79,7 +79,13 @@ const stickyOffsets = [0, 120]
 
 const fmt = (n: number) => Math.round(n).toLocaleString("ko-KR") + "원"
 
-const BADGE_KEYS = ["category", "corpName", "status", "deposit", "monthlyRent", "sharedOfficeName"]
+function daysUntil(dateStr: string | null): number | null {
+  if (!dateStr) return null
+  const diff = new Date(dateStr).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)
+  return Math.round(diff / 86_400_000)
+}
+
+const BADGE_KEYS = ["category", "corpName", "status", "deposit", "monthlyRent", "sharedOfficeName", "contractEnd"]
 
 type FormData = {
   category: string; corpName: string; ceoName: string; location: string
@@ -491,6 +497,27 @@ export function LeaseView() {
                           {col.key === "deposit" && <span className="tabular-nums">{fmt(row.deposit)}</span>}
                           {col.key === "monthlyRent" && <span className="tabular-nums">{fmt(row.monthlyRent)}</span>}
                           {col.key === "sharedOfficeName" && <span className="text-muted-foreground">{row.sharedOfficeName || "-"}</span>}
+                          {col.key === "contractEnd" && (() => {
+                            const d = daysUntil(row.contractEnd)
+                            const isExpired = row.status === "만료"
+                            const warn = d !== null && d <= 30 && !isExpired
+                            const past = d !== null && d < 0 && !isExpired
+                            return (
+                              <span className="flex items-center gap-1.5">
+                                <span className={warn || past ? "text-red-600 font-medium" : ""}>{row.contractEnd ?? "-"}</span>
+                                {warn && !past && (
+                                  <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-600 leading-none whitespace-nowrap">
+                                    {d === 0 ? "D-day" : `D-${d}`}
+                                  </span>
+                                )}
+                                {past && (
+                                  <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500 leading-none whitespace-nowrap">
+                                    만료
+                                  </span>
+                                )}
+                              </span>
+                            )
+                          })()}
                           {!BADGE_KEYS.includes(col.key) && (String(row[col.key as keyof LeaseEntry] ?? "") || "-")}
                         </td>
                       ))}

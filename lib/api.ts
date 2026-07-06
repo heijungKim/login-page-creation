@@ -143,7 +143,7 @@ export async function login(
     { username, password },
     { auth: false },
   )
-  saveAccessToken(data.accessToken, persist)
+  saveAccessToken(data.accessToken, persist, username)
   return data
 }
 

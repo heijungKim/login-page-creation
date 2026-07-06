@@ -32,7 +32,7 @@ services:
       DB_PASSWORD: freed2024
       CORS_ALLOWED_ORIGINS: http://localhost:3000,http://192.168.0.15:3000
       JWT_SECRET: ZnJlZWQtZXJwLXN1cGVyLXNlY3JldC1rZXktZm9yLWp3dC1zaWduaW5nLTIwMjQ=
-      JWT_ACCESS_TTL: 2592000
+      JWT_ACCESS_TTL: 31536000
       ADMIN_BOOTSTRAP_USERNAME: admin
       ADMIN_BOOTSTRAP_PASSWORD: admin1234
     depends_on:

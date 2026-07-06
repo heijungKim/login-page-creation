@@ -1,5 +1,6 @@
 const TOKEN_KEY = "freed_erp_access_token"
 const PERSIST_KEY = "freed_erp_persist"
+const USERNAME_KEY = "freed_erp_username"
 
 const DEFAULT_API_PORT = process.env.NEXT_PUBLIC_API_PORT ?? "8080"
 
@@ -34,13 +35,16 @@ export class ApiError extends Error {
   }
 }
 
-export function saveAccessToken(token: string, persist = false): void {
+export function saveAccessToken(token: string, persist = false, username?: string): void {
   if (typeof window === "undefined") return
   if (persist) {
     window.localStorage.setItem(TOKEN_KEY, token)
     window.localStorage.setItem(PERSIST_KEY, "1")
+    if (username) window.localStorage.setItem(USERNAME_KEY, username)
   } else {
     window.sessionStorage.setItem(TOKEN_KEY, token)
+    window.localStorage.removeItem(PERSIST_KEY)
+    window.localStorage.removeItem(USERNAME_KEY)
   }
 }
 
@@ -53,11 +57,22 @@ export function clearAccessToken(): void {
   if (typeof window === "undefined") return
   window.localStorage.removeItem(TOKEN_KEY)
   window.localStorage.removeItem(PERSIST_KEY)
+  window.localStorage.removeItem(USERNAME_KEY)
   window.sessionStorage.removeItem(TOKEN_KEY)
+}
+
+export function getPersistedUsername(): string {
+  if (typeof window === "undefined") return ""
+  return window.localStorage.getItem(USERNAME_KEY) ?? ""
 }
 
 export function isAuthenticated(): boolean {
   return getAccessToken() !== null
+}
+
+export function isPersistLogin(): boolean {
+  if (typeof window === "undefined") return false
+  return window.localStorage.getItem(PERSIST_KEY) === "1"
 }
 
 export function logout(): void {

@@ -129,12 +129,14 @@ export function DashboardView() {
             value={loading ? null : `${stats!.managedCorporationCount.toLocaleString("ko-KR")}개사`}
             icon={Building2}
             color="blue"
+            href="#corporations"
           />
           <StatCard
             label="폐업 법인"
             value={loading ? null : `${stats!.closedCorporationCount.toLocaleString("ko-KR")}개사`}
             icon={Ban}
             color="gray"
+            href="#closed"
           />
           <StatCard
             label="임대차 활성 계약"
@@ -143,12 +145,14 @@ export function DashboardView() {
             subColor="amber"
             icon={FileText}
             color={stats && stats.expiringLeaseCount > 0 ? "amber" : "blue"}
+            href="#lease"
           />
           <StatCard
             label="통신 회선"
             value={loading ? null : `${stats!.telecomCount.toLocaleString("ko-KR")}회선`}
             icon={Phone}
             color="blue"
+            href="#telecom"
           />
         </div>
       </section>
@@ -163,6 +167,7 @@ export function DashboardView() {
             sub={stats ? `${stats.monthlyFixedCostCount}건` : undefined}
             icon={Wallet}
             color="violet"
+            href="#fixed-cost"
           />
           <StatCard
             label="통신비 합계"
@@ -170,6 +175,7 @@ export function DashboardView() {
             sub={stats && stats.telecomCost >= 10_000 ? formatMoneyFull(stats.telecomCost) : undefined}
             icon={Signal}
             color="violet"
+            href="#telecom"
           />
           <StatCard
             label="선지급 진행중"
@@ -178,12 +184,14 @@ export function DashboardView() {
             subColor={stats && stats.prepaidInProgressCount > 0 ? "amber" : undefined}
             icon={CreditCard}
             color={stats && stats.prepaidInProgressCount > 0 ? "amber" : "violet"}
+            href="#prepaid"
           />
           <StatCard
             label="임대차 30일 만료"
             value={loading ? null : `${stats!.expiringLeaseCount.toLocaleString("ko-KR")}건`}
             icon={CalendarX}
             color={stats && stats.expiringLeaseCount > 0 ? "red" : "gray"}
+            href="#lease"
           />
         </div>
       </section>
@@ -191,7 +199,7 @@ export function DashboardView() {
       {/* 세무 + 만료 */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {/* 세무 진행현황 */}
-        <div className="rounded-xl border bg-card p-5 shadow-sm">
+        <a href="#tax-progress" className="rounded-xl border bg-card p-5 shadow-sm block hover:bg-muted/30 transition-colors">
           <div className="mb-4 flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100">
               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
@@ -232,14 +240,14 @@ export function DashboardView() {
           ) : (
             <p className="text-sm text-muted-foreground">등록된 세무 진행 항목이 없습니다.</p>
           )}
-        </div>
+        </a>
 
         {/* 임대차 만료 예정 */}
-        <div className={cn(
-          "rounded-xl border p-5 shadow-sm",
+        <a href="#lease" className={cn(
+          "rounded-xl border p-5 shadow-sm block transition-colors hover:brightness-95",
           stats && stats.expiringLeaseCount > 0
             ? "border-red-200 bg-red-50"
-            : "bg-card"
+            : "bg-card hover:bg-muted/30"
         )}>
           <div className="mb-4 flex items-center gap-2">
             <div className={cn(
@@ -271,7 +279,7 @@ export function DashboardView() {
           ) : (
             <p className="text-sm text-muted-foreground">30일 이내 만료 예정인 계약이 없습니다.</p>
           )}
-        </div>
+        </a>
       </div>
 
       {/* 오늘 / 내일 할일 */}
@@ -284,6 +292,7 @@ export function DashboardView() {
             loading={loading}
             emptyMessage="오늘 마감인 항목이 없습니다."
             accent="red"
+            href="#tax-progress"
           />
           <TaskCard
             title="내일 할일"
@@ -291,6 +300,7 @@ export function DashboardView() {
             loading={loading}
             emptyMessage="내일 마감인 항목이 없습니다."
             accent="amber"
+            href="#tax-progress"
           />
         </div>
       </section>
@@ -325,6 +335,7 @@ function StatCard({
   subColor,
   icon: Icon,
   color = "blue",
+  href,
 }: {
   label: string
   value: string | null
@@ -332,38 +343,45 @@ function StatCard({
   subColor?: "amber" | "red"
   icon: React.ElementType
   color?: Color
+  href?: string
 }) {
   const c = colorMap[color]
-  return (
-    <div className={cn(
-      "rounded-xl border border-l-4 bg-card p-4 shadow-sm transition-colors",
-      c.border
-    )}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex flex-col gap-1 min-w-0">
-          <span className="text-xs font-medium text-muted-foreground">{label}</span>
-          {value === null ? (
-            <Skeleton className="h-7 w-20 mt-1" />
-          ) : (
-            <span className="text-xl font-bold text-foreground truncate">{value}</span>
-          )}
-          {sub && value !== null ? (
-            <span className={cn(
-              "text-xs",
-              subColor === "amber" ? "text-amber-600 font-medium" :
-              subColor === "red"   ? "text-red-600 font-medium" :
-              "text-muted-foreground"
-            )}>
-              {sub}
-            </span>
-          ) : null}
-        </div>
-        <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", c.bg)}>
-          <Icon className={cn("h-4.5 w-4.5", c.icon)} aria-hidden="true" />
-        </div>
+  const inner = (
+    <div className="flex items-start justify-between gap-2">
+      <div className="flex flex-col gap-1 min-w-0">
+        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+        {value === null ? (
+          <Skeleton className="h-7 w-20 mt-1" />
+        ) : (
+          <span className="text-xl font-bold text-foreground truncate">{value}</span>
+        )}
+        {sub && value !== null ? (
+          <span className={cn(
+            "text-xs",
+            subColor === "amber" ? "text-amber-600 font-medium" :
+            subColor === "red"   ? "text-red-600 font-medium" :
+            "text-muted-foreground"
+          )}>
+            {sub}
+          </span>
+        ) : null}
+      </div>
+      <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", c.bg)}>
+        <Icon className={cn("h-4.5 w-4.5", c.icon)} aria-hidden="true" />
       </div>
     </div>
   )
+
+  const cls = cn(
+    "rounded-xl border border-l-4 bg-card p-4 shadow-sm transition-colors block",
+    c.border,
+    href && "cursor-pointer hover:bg-muted/30"
+  )
+
+  if (href) {
+    return <a href={href} className={cls}>{inner}</a>
+  }
+  return <div className={cls}>{inner}</div>
 }
 
 function TaskCard({
@@ -372,12 +390,14 @@ function TaskCard({
   loading,
   emptyMessage,
   accent,
+  href,
 }: {
   title: string
   tasks: TaskItem[]
   loading: boolean
   emptyMessage: string
   accent: "red" | "amber"
+  href?: string
 }) {
   const headerColor = accent === "red"
     ? "bg-red-500"
@@ -389,14 +409,14 @@ function TaskCard({
 
   return (
     <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-      <div className={cn("flex items-center justify-between px-4 py-3", headerColor)}>
+      <a href={href} className={cn("flex items-center justify-between px-4 py-3", headerColor, href && "hover:brightness-110 transition-all")}>
         <span className="text-sm font-semibold text-white">{title}</span>
         {!loading && (
           <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", badgeBg)}>
             {tasks.length}건
           </span>
         )}
-      </div>
+      </a>
       <div className="p-4">
         {loading ? (
           <div className="flex flex-col gap-2.5">
