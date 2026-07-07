@@ -245,8 +245,8 @@ export function TaxProgressView() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">월 세무 진행현황</h2>
+        <div className="flex flex-col gap-0.5">
+          <h2 className="mobile-hidden text-lg font-semibold">월 세무 진행현황</h2>
           <p className="text-sm text-muted-foreground">
             {loading ? "불러오는 중..." : `전체 ${rows.length}건`}
           </p>
@@ -303,8 +303,8 @@ export function TaxProgressView() {
 
       <div className="rounded-lg border border-border bg-card min-h-80 max-h-[calc(100svh-14rem)] overflow-auto">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 z-20">
-            <tr className="border-b border-border bg-muted/40 text-left text-muted-foreground">
+          <thead className="sticky top-0 z-20 bg-muted">
+            <tr className="border-b border-border bg-muted text-left text-muted-foreground">
               {bulkMode && (
                 <th className="w-10 px-4 py-3 font-medium">
                   <input type="checkbox"

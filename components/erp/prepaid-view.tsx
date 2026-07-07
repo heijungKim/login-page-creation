@@ -332,7 +332,7 @@ export function PrepaidView() {
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-0.5">
-          <h2 className="text-xl font-semibold tracking-tight text-foreground">선지급 내역</h2>
+          <h2 className="mobile-hidden text-xl font-semibold tracking-tight text-foreground">선지급 내역</h2>
           <p className="text-sm text-muted-foreground">
             {loading ? "불러오는 중..." : `전체 ${summaries.length}명 · 현재 ${filteredSummaries.length}명 표시`}
           </p>
@@ -379,7 +379,7 @@ export function PrepaidView() {
               return { success, failed }
             }}
           />
-          <Button onClick={() => { setForm(emptyForm); setOpen(true); setSubmitError(null) }} className="gap-1.5">
+          <Button size="sm" onClick={() => { setForm(emptyForm); setOpen(true); setSubmitError(null) }} className="gap-1.5">
             <Plus className="h-4 w-4" aria-hidden="true" />
             선지급 등록
           </Button>
@@ -415,10 +415,10 @@ export function PrepaidView() {
         <CardContent className="p-0">
           <div className="min-h-80 max-h-[calc(100svh-14rem)] overflow-auto">
             <table className="w-full border-collapse text-sm">
-              <thead className="sticky top-0 z-20">
+              <thead className="sticky top-0 z-20 bg-muted">
                 <tr className="text-left text-muted-foreground">
                   {bulkMode && (
-                    <th className="w-10 px-3 py-2.5 border-b border-border bg-muted/70">
+                    <th className="w-10 px-3 py-2.5 border-b border-border bg-muted">
                       <input type="checkbox"
                         className="h-4 w-4 rounded border-border"
                         checked={selectedKeys.size === filteredSummaries.length && filteredSummaries.length > 0}
@@ -429,7 +429,7 @@ export function PrepaidView() {
                   {columns.map((col) => (
                     <th
                       key={col.key}
-                      className="border-b border-border bg-muted/70 px-3 py-2.5 align-middle font-medium backdrop-blur"
+                      className="border-b border-border bg-muted px-3 py-2.5 align-middle font-medium"
                       style={{ minWidth: col.minWidth }}
                     >
                       {col.filterOptions ? (

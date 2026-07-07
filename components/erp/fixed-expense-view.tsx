@@ -244,8 +244,8 @@ export function FixedExpenseView() {
     <div className="space-y-4">
       {/* 헤더 */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">고정지출</h2>
+        <div className="flex flex-col gap-0.5">
+          <h2 className="mobile-hidden text-lg font-semibold">고정지출</h2>
           <p className="text-sm text-muted-foreground">전체 {items.length}개 항목</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

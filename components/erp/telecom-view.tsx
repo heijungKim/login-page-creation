@@ -403,7 +403,7 @@ export function TelecomView() {
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-0.5">
-          <h2 className="text-xl font-semibold tracking-tight text-foreground">통신비</h2>
+          <h2 className="mobile-hidden text-xl font-semibold tracking-tight text-foreground">통신비</h2>
           <p className="text-sm text-muted-foreground">
             {loading ? "불러오는 중..." : `전체 ${rows.length}건 · 현재 ${filteredRows.length}건 표시`}
           </p>
@@ -453,7 +453,7 @@ export function TelecomView() {
               return { success, failed }
             }}
           />
-          <Button onClick={() => setOpen(true)} className="gap-1.5">
+          <Button size="sm" onClick={() => setOpen(true)} className="gap-1.5">
             <Plus className="h-4 w-4" aria-hidden="true" />
             통신비 등록
           </Button>
@@ -471,10 +471,10 @@ export function TelecomView() {
         <CardContent className="p-0">
           <div className="min-h-80 max-h-[calc(100svh-14rem)] overflow-auto">
             <table className="w-full border-collapse text-sm">
-              <thead className="sticky top-0 z-20">
+              <thead className="sticky top-0 z-20 bg-muted">
                 <tr className="text-left text-muted-foreground">
                   {bulkMode && (
-                    <th className="w-10 px-3 py-2.5 border-b border-border bg-muted/70">
+                    <th className="w-10 px-3 py-2.5 border-b border-border bg-muted">
                       <input type="checkbox"
                         className="h-4 w-4 rounded border-border"
                         checked={selectedIds.size === filteredRows.length && filteredRows.length > 0}
@@ -486,7 +486,7 @@ export function TelecomView() {
                     <th
                       key={col.key}
                       className={cn(
-                        "border-b border-border bg-muted/70 px-3 py-2.5 align-middle font-medium backdrop-blur",
+                        "border-b border-border bg-muted px-3 py-2.5 align-middle font-medium",
                         colIdx < 3 && "sm:sticky sm:z-10",
                       )}
                       style={{

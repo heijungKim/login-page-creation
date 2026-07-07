@@ -201,7 +201,7 @@ export function ExcelUploadButton({ templateName, columns, onRows }: Props) {
 
   return (
     <>
-      <Button variant="outline" size="sm" className="gap-1.5 h-9" onClick={() => setOpen(true)}>
+      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setOpen(true)}>
         <Upload className="h-4 w-4" />
         엑셀 업로드
       </Button>

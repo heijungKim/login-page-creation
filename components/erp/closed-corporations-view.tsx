@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import React, { useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -115,7 +115,7 @@ export function ClosedCorporationsView() {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-0.5">
-        <h2 className="text-xl font-semibold tracking-tight text-foreground">폐업 법인</h2>
+        <h2 className="mobile-hidden text-xl font-semibold tracking-tight text-foreground">폐업 법인</h2>
         <p className="text-sm text-muted-foreground">
           {loading ? "불러오는 중..." : `전체 ${closedRows.length}개 폐업 법인 · 현재 ${filteredRows.length}개 표시`}
         </p>
@@ -136,13 +136,13 @@ export function ClosedCorporationsView() {
         <CardContent className="p-0">
           <div className="min-h-80 max-h-[calc(100svh-14rem)] overflow-auto">
             <table className="w-full border-collapse text-sm">
-              <thead className="sticky top-0 z-20">
+              <thead className="sticky top-0 z-20 bg-muted">
                 <tr className="text-left text-muted-foreground">
                   {columns.map((col) => (
                     <th
                       key={col.key}
                       className={cn(
-                        "border-b border-border bg-muted/70 px-3 py-2.5 align-middle font-medium backdrop-blur",
+                        "border-b border-border bg-muted px-3 py-2.5 align-middle font-medium",
                         col.sticky && "sm:sticky sm:z-10",
                       )}
                       style={{

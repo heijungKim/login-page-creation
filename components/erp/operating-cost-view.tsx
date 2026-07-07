@@ -288,7 +288,7 @@ export function OperatingCostView() {
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-0.5">
-          <h2 className="text-xl font-semibold tracking-tight text-foreground">운영비 관리</h2>
+          <h2 className="mobile-hidden text-xl font-semibold tracking-tight text-foreground">운영비 관리</h2>
           <p className="text-sm text-muted-foreground">법인별 입출금 내역을 관리합니다.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -575,8 +575,8 @@ export function OperatingCostView() {
             <CardContent className="p-0">
               <div className="min-h-80 max-h-[calc(100svh-14rem)] overflow-auto">
                 <table className="w-full border-collapse text-sm">
-                  <thead className="sticky top-0 z-10">
-                    <tr className="border-b border-border bg-muted/70 text-left text-muted-foreground">
+                  <thead className="sticky top-0 z-10 bg-muted">
+                    <tr className="border-b border-border bg-muted text-left text-muted-foreground">
                       {bulkMode && (
                         <th className="w-10 px-3 py-2.5 font-medium">
                           <input type="checkbox"
@@ -698,7 +698,7 @@ export function OperatingCostView() {
       {bulkConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-sm rounded-lg border border-border bg-background p-6 shadow-lg">
-            <h2 className="text-base font-semibold mb-2">일괄 삭제</h2>
+            <h2 className="mobile-hidden text-base font-semibold mb-2">일괄 삭제</h2>
             <p className="text-sm text-muted-foreground py-2">
               선택한 <span className="font-semibold text-foreground">{selectedIds.size}건</span>을 삭제하시겠습니까?<br />
               삭제 후 복구할 수 없습니다.

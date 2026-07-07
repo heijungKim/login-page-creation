@@ -53,18 +53,18 @@ const statusStyles: Record<string, string> = {
 }
 
 const columns = [
-  { key: "status", label: "상태", minWidth: "100px" },
-  { key: "name", label: "이름", minWidth: "110px" },
-  { key: "regNo", label: "주민번호", minWidth: "145px" },
-  { key: "contact", label: "연락처", minWidth: "130px" },
-  { key: "email", label: "이메일", minWidth: "200px" },
-  { key: "address", label: "주소", minWidth: "220px" },
-  { key: "account", label: "계좌정보", minWidth: "190px" },
-  { key: "note", label: "비고", minWidth: "160px" },
-  { key: "bizRegion", label: "지역", minWidth: "110px" },
-  { key: "bizCity", label: "시", minWidth: "100px" },
-  { key: "bizRegDate", label: "사업자 등록일", minWidth: "120px" },
-  { key: "registeredAt", label: "등록일", minWidth: "110px" },
+  { key: "status", label: "상태", minWidth: "110px" },
+  { key: "name", label: "이름", minWidth: "130px" },
+  { key: "regNo", label: "주민번호", minWidth: "160px" },
+  { key: "contact", label: "연락처", minWidth: "150px" },
+  { key: "email", label: "이메일", minWidth: "230px" },
+  { key: "address", label: "주소", minWidth: "260px" },
+  { key: "account", label: "계좌정보", minWidth: "220px" },
+  { key: "note", label: "비고", minWidth: "180px" },
+  { key: "bizRegion", label: "지역", minWidth: "120px" },
+  { key: "bizCity", label: "시", minWidth: "120px" },
+  { key: "bizRegDate", label: "사업자 등록일", minWidth: "140px" },
+  { key: "registeredAt", label: "등록일", minWidth: "120px" },
 ] as const
 
 const stickyOffsets = [0, 100]
@@ -318,7 +318,7 @@ export function AuditRegionView() {
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-0.5">
-          <h2 className="text-xl font-semibold tracking-tight text-foreground">감사/사업자 지역</h2>
+          <h2 className="mobile-hidden text-xl font-semibold tracking-tight text-foreground">감사/사업자 지역</h2>
           <p className="text-sm text-muted-foreground">
             {loading ? "불러오는 중..." : `전체 ${rows.length}건 · 현재 ${filteredRows.length}건 표시`}
           </p>
@@ -366,7 +366,7 @@ export function AuditRegionView() {
               return { success, failed }
             }}
           />
-          <Button onClick={() => { setSubmitError(null); setForm(emptyForm()); setOpen(true) }} className="gap-1.5">
+          <Button size="sm" onClick={() => { setSubmitError(null); setForm(emptyForm()); setOpen(true) }} className="gap-1.5">
             <Plus className="h-4 w-4" />등록
           </Button>
         </div>
@@ -377,16 +377,16 @@ export function AuditRegionView() {
       <Card className="overflow-hidden py-0 shadow-sm">
         <CardContent className="p-0">
           <div className="min-h-80 max-h-[calc(100svh-14rem)] overflow-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead className="sticky top-0 z-20">
+            <table className="w-full border-separate border-spacing-0 text-sm">
+              <thead className="sticky top-0 z-20 bg-muted">
                 <tr className="text-left text-xs font-semibold">
-                  <th colSpan={8} className="border-b border-border/40 bg-muted/60 px-3 py-1 text-muted-foreground">기본 정보</th>
-                  <th colSpan={3} className="border-b border-border/40 border-l-2 border-l-indigo-300 bg-indigo-50/70 px-3 py-1 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400">사업자 정보</th>
-                  <th className="border-b border-border/40 bg-muted/60 px-3 py-1" />
+                  <th colSpan={8} className="border-b border-border/40 bg-muted px-3 py-1 text-muted-foreground">기본 정보</th>
+                  <th colSpan={3} className="border-b border-border/40 border-l-2 border-l-indigo-300 bg-indigo-100 px-3 py-1 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400">사업자 정보</th>
+                  <th className="border-b border-border/40 bg-muted px-3 py-1" />
                 </tr>
                 <tr className="text-left text-muted-foreground">
                   {bulkMode && (
-                    <th className="w-10 px-3 py-2.5 border-b border-border bg-muted/70">
+                    <th className="w-10 px-3 py-2.5 border-b border-border bg-muted">
                       <input type="checkbox"
                         className="h-4 w-4 rounded border-border"
                         checked={selectedIds.size === filteredRows.length && filteredRows.length > 0}
@@ -400,9 +400,9 @@ export function AuditRegionView() {
                       <th
                         key={col.key}
                         className={cn(
-                          "border-b border-border px-3 py-2.5 align-middle font-medium backdrop-blur",
+                          "border-b border-border px-3 py-2.5 align-middle font-medium",
                           colIdx < 2 && "sm:sticky sm:z-10",
-                          isBiz ? "bg-indigo-50/50 dark:bg-indigo-950/20" : "bg-muted/70",
+                          isBiz ? "bg-indigo-100 dark:bg-indigo-950" : "bg-muted",
                           isBiz && colIdx === 8 && "border-l-2 border-l-indigo-300",
                         )}
                         style={{ minWidth: col.minWidth, left: colIdx < 2 ? stickyOffsets[colIdx] : undefined }}
@@ -496,7 +496,7 @@ export function AuditRegionView() {
 
       {/* 상세/수정 다이얼로그 */}
       <Dialog open={!!detail} onOpenChange={(o) => { if (!o) { setDetail(null); setEditMode(false); setSubmitError(null) } }}>
-        <DialogContent className="sm:w-[60vw] sm:max-w-[60vw]">
+        <DialogContent className="sm:w-[80vw] sm:max-w-[80vw]">
           <DialogHeader><DialogTitle>상세 정보</DialogTitle></DialogHeader>
           {detail && (() => {
             const detailBizInfos = parseBizInfos(detail.bizInfos, { bizRegion: detail.bizRegion, bizCity: detail.bizCity, bizRegDate: detail.bizRegDate })
@@ -605,7 +605,7 @@ export function AuditRegionView() {
 
       {/* 등록 다이얼로그 */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:w-[60vw] sm:max-w-[60vw]">
+        <DialogContent className="sm:w-[80vw] sm:max-w-[80vw]">
           <DialogHeader><DialogTitle>등록</DialogTitle></DialogHeader>
           {submitError && <p className="text-xs text-destructive">{submitError}</p>}
           <div className="flex flex-col gap-4 py-2">

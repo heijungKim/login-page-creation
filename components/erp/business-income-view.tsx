@@ -552,8 +552,8 @@ export function BusinessIncomeView() {
     <div className="flex flex-col gap-6">
       {/* 헤더 */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-foreground">사업소득</h2>
+        <div className="flex flex-col gap-0.5">
+          <h2 className="mobile-hidden text-xl font-bold tracking-tight text-foreground">사업소득</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {loading ? "불러오는 중..." : `전체 ${rows.length}건 · 표시 ${filteredRows.length}건`}
           </p>
@@ -605,7 +605,7 @@ export function BusinessIncomeView() {
               return { success, failed }
             }}
           />
-          <Button onClick={() => { setSubmitError(null); setOpen(true) }} className="gap-2 h-9">
+          <Button size="sm" onClick={() => { setSubmitError(null); setOpen(true) }} className="gap-1.5">
             <Plus className="h-4 w-4" />
             소득 등록
           </Button>
@@ -621,11 +621,11 @@ export function BusinessIncomeView() {
         <CardContent className="p-0">
           <div className="min-h-80 max-h-[calc(100svh-14rem)] overflow-auto">
             <table className="w-full border-collapse text-sm">
-              <thead className="sticky top-0 z-20">
+              <thead className="sticky top-0 z-20 bg-muted">
                 {/* 컬럼 레이블 */}
                 <tr className="border-b border-border/60 bg-muted/80 backdrop-blur">
                   {bulkMode && (
-                    <th className="w-10 px-3 py-2.5 border-b border-border bg-muted/70" rowSpan={2}>
+                    <th className="w-10 px-3 py-2.5 border-b border-border bg-muted" rowSpan={2}>
                       <input type="checkbox"
                         className="h-4 w-4 rounded border-border"
                         checked={selectedIds.size === filteredRows.length && filteredRows.length > 0}
@@ -644,11 +644,11 @@ export function BusinessIncomeView() {
                   ))}
                 </tr>
                 {/* 필터 행 */}
-                <tr className="border-b border-border bg-muted/40 backdrop-blur">
+                <tr className="border-b border-border bg-muted">
                   {columns.map((col, i) => (
                     <th
                       key={col.key + "-filter"}
-                      className={cn("px-2 py-1.5", i < 2 && "sticky z-10 bg-muted/40")}
+                      className={cn("px-2 py-1.5", i < 2 && "sticky z-10 bg-muted")}
                       style={{ left: i < 2 ? stickyOffsets[i] : undefined }}
                     >
                       <Input
@@ -1072,17 +1072,17 @@ export function BusinessIncomeView() {
             </div>
           )}
 
-          <DialogFooter className="px-6 py-4 border-t border-border bg-muted/20 flex items-center justify-between">
+          <DialogFooter className="px-6 py-4 border-t border-border bg-muted/20 flex items-center gap-3">
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+              className="flex-1 gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
               onClick={handleDeleteIncome}
             >
               <Trash2 className="h-3.5 w-3.5" />
               삭제
             </Button>
-            <Button variant="outline" onClick={() => { setDetail(null); setEditMode(false); setEditingPaymentId(null) }}>닫기</Button>
+            <Button variant="outline" size="sm" className="flex-1" onClick={() => { setDetail(null); setEditMode(false); setEditingPaymentId(null) }}>닫기</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

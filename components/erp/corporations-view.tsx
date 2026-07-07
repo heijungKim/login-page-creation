@@ -259,7 +259,7 @@ export function CorporationsView() {
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-0.5">
-          <h2 className="text-xl font-semibold tracking-tight text-foreground">법인 관리</h2>
+          <h2 className="mobile-hidden text-xl font-semibold tracking-tight text-foreground">법인 관리</h2>
           <p className="text-sm text-muted-foreground">
             {loading ? "불러오는 중..." : `전체 ${activeRows.length}개 법인 · 현재 ${filteredRows.length}개 표시`}
           </p>
@@ -331,7 +331,7 @@ export function CorporationsView() {
               return { success, failed }
             }}
           />
-          <Button onClick={() => setOpen(true)} className="gap-1.5" disabled={submitting}>
+          <Button size="sm" onClick={() => setOpen(true)} className="gap-1.5" disabled={submitting}>
             <Plus className="h-4 w-4" aria-hidden="true" />
             법인 등록
           </Button>
@@ -348,10 +348,10 @@ export function CorporationsView() {
         <CardContent className="p-0">
           <div className="min-h-80 max-h-[calc(100svh-14rem)] overflow-auto">
             <table className="w-full border-collapse text-sm">
-              <thead className="sticky top-0 z-20">
+              <thead className="sticky top-0 z-20 bg-muted">
                 <tr className="text-left text-muted-foreground">
                   {bulkMode && (
-                    <th className="w-10 px-3 py-2.5 border-b border-border bg-muted/70">
+                    <th className="w-10 px-3 py-2.5 border-b border-border bg-muted">
                       <input type="checkbox"
                         className="h-4 w-4 rounded border-border"
                         checked={selectedIds.size === filteredRows.length && filteredRows.length > 0}
@@ -363,7 +363,7 @@ export function CorporationsView() {
                     <th
                       key={col.key}
                       className={cn(
-                        "border-b border-border bg-muted/70 px-3 py-2.5 align-middle font-medium backdrop-blur",
+                        "border-b border-border bg-muted px-3 py-2.5 align-middle font-medium",
                         col.sticky && "sm:sticky sm:z-10",
                       )}
                       style={{
@@ -778,17 +778,17 @@ export function CorporationsView() {
                 </div>
               )}
               <DialogFooter className="border-t border-border px-6 py-5">
-                <div className="flex w-full items-center justify-between">
+                <div className="flex w-full items-center gap-3">
                   <Button
                     variant="outline"
-                    className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+                    className="flex-1 gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
                     disabled={isEditing || submitting}
                     onClick={() => setDeleteConfirm(true)}
                   >
                     <Trash2 className="h-4 w-4" />
                     삭제
                   </Button>
-                  <Button variant="outline" onClick={() => { setDetail(null); setIsEditing(false) }}>닫기</Button>
+                  <Button variant="outline" className="flex-1" onClick={() => { setDetail(null); setIsEditing(false) }}>닫기</Button>
                 </div>
               </DialogFooter>
             </>
