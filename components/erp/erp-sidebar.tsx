@@ -76,15 +76,17 @@ export function ErpSidebar({
   active,
   onSelect,
   open,
+  onClose,
 }: {
   active: string
   onSelect: (id: string) => void
   open?: boolean
+  onClose?: () => void
 }) {
   return (
     <aside className={cn(
-      "fixed inset-y-0 left-0 z-40 flex h-full w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-transform duration-200 ease-in-out",
-      "md:static md:z-auto md:translate-x-0",
+      "fixed inset-y-0 left-0 z-40 flex h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-transform duration-200 ease-in-out",
+      "md:static md:z-auto md:translate-x-0 md:w-60",
       open ? "translate-x-0" : "-translate-x-full md:translate-x-0",
     )}>
       {/* 로고 */}
@@ -98,6 +100,16 @@ export function ErpSidebar({
             <span className="text-[11px] text-sidebar-foreground/50 font-medium tracking-wide">ERP System</span>
           </div>
         </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="md:hidden flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+            aria-label="메뉴 닫기"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* 메뉴 */}

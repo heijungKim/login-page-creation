@@ -53,11 +53,17 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          // 모바일: 하단 바텀시트
+          "fixed bottom-0 left-0 right-0 z-50 grid w-full gap-4 rounded-t-2xl bg-popover pb-safe px-4 pt-4 text-sm text-popover-foreground ring-1 ring-foreground/10 outline-none max-h-[75dvh] overflow-y-auto",
+          "duration-150 data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-bottom-4 data-closed:animate-out data-closed:fade-out-0 data-closed:slide-out-to-bottom-4",
+          // 데스크톱: 중앙 모달
+          "sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-h-[calc(100dvh-4rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl sm:max-w-sm sm:data-open:slide-in-from-bottom-0 sm:data-open:zoom-in-95 sm:data-closed:slide-out-to-bottom-0 sm:data-closed:zoom-out-95",
           className
         )}
         {...props}
       >
+        {/* 모바일 드래그 핸들 */}
+        <div className="mx-auto mb-1 h-1 w-10 rounded-full bg-muted-foreground/20 sm:hidden" />
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close
@@ -70,8 +76,7 @@ function DialogContent({
               />
             }
           >
-            <XIcon
-            />
+            <XIcon />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}

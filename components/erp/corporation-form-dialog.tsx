@@ -288,13 +288,13 @@ export function CorporationFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-3xl">
+      <DialogContent className="sm:max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-3xl">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle>법인 등록</DialogTitle>
           <DialogDescription>신규 법인의 기본 정보와 계정 정보를 입력하세요.</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex max-h-[calc(90svh-9rem)] flex-col">
+        <form onSubmit={handleSubmit} className="flex max-h-[calc(75dvh-9rem)] sm:max-h-[calc(90svh-9rem)] flex-col">
           <div className="flex flex-col gap-5 overflow-y-auto px-6 py-5">
             <Section title="기본 정보">
               <div className="flex flex-col gap-1.5">

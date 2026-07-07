@@ -125,8 +125,22 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* 아이폰 노치/홈 바 safe area */
+    padding-bottom: env(safe-area-inset-bottom);
   }
   html {
     @apply font-sans;
+    /* 모바일 텍스트 크기 자동 조정 방지 */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
+}
+
+/* safe-area 유틸리티 */
+.pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
 }

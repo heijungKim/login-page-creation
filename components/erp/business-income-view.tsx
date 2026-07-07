@@ -551,14 +551,14 @@ export function BusinessIncomeView() {
   return (
     <div className="flex flex-col gap-6">
       {/* 헤더 */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-foreground">사업소득</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {loading ? "불러오는 중..." : `전체 ${rows.length}건 · 표시 ${filteredRows.length}건`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {bulkMode ? (
             <>
               {selectedIds.size > 0 && (
@@ -619,7 +619,7 @@ export function BusinessIncomeView() {
       {/* 목록 테이블 */}
       <Card className="overflow-hidden py-0 shadow-sm">
         <CardContent className="p-0">
-          <div className="overflow-auto">
+          <div className="min-h-80 max-h-[calc(100svh-14rem)] overflow-auto">
             <table className="w-full border-collapse text-sm">
               <thead className="sticky top-0 z-20">
                 {/* 컬럼 레이블 */}
@@ -764,7 +764,7 @@ export function BusinessIncomeView() {
 
       {/* 상세 팝업 */}
       <Dialog open={!!detail} onOpenChange={(o) => { if (!o) { setDetail(null); setEditMode(false); setEditingPaymentId(null); setSubmitError(null) } }}>
-        <DialogContent className="w-[95vw] max-w-[95vw] sm:w-[90vw] sm:max-w-[90vw] md:w-[85vw] md:max-w-[85vw] lg:w-[78vw] lg:max-w-[78vw] max-h-[92vh] overflow-x-hidden overflow-y-auto p-0">
+        <DialogContent className="sm:w-[90vw] sm:max-w-[90vw] md:w-[85vw] md:max-w-[85vw] lg:w-[78vw] lg:max-w-[78vw] overflow-x-hidden p-0">
           <DialogHeader className="px-6 pt-5 pb-4 border-b border-border bg-muted/30">
             <div className="flex items-start justify-between">
               <div>
@@ -1089,7 +1089,7 @@ export function BusinessIncomeView() {
 
       {/* 소득 등록 다이얼로그 */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-[95vw] sm:w-[85vw] sm:max-w-[85vw] md:w-[70vw] md:max-w-[70vw] lg:w-[58vw] lg:max-w-[58vw] max-h-[90vh] overflow-y-auto p-0">
+        <DialogContent className="sm:w-[85vw] sm:max-w-[85vw] md:w-[70vw] md:max-w-[70vw] lg:w-[58vw] lg:max-w-[58vw] p-0">
           <DialogHeader className="px-6 pt-5 pb-4 border-b border-border">
             <DialogTitle className="text-lg font-bold">소득자 등록</DialogTitle>
           </DialogHeader>
@@ -1153,3 +1153,5 @@ export function BusinessIncomeView() {
     </div>
   )
 }
+
+

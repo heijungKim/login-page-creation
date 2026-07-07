@@ -257,14 +257,14 @@ export function CorporationsView() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-0.5">
           <h2 className="text-xl font-semibold tracking-tight text-foreground">법인 관리</h2>
           <p className="text-sm text-muted-foreground">
             {loading ? "불러오는 중..." : `전체 ${activeRows.length}개 법인 · 현재 ${filteredRows.length}개 표시`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {bulkMode ? (
             <>
               {selectedIds.size > 0 && (
@@ -346,7 +346,7 @@ export function CorporationsView() {
 
       <Card className="overflow-hidden py-0 shadow-sm">
         <CardContent className="p-0">
-          <div className="min-h-80 overflow-auto">
+          <div className="min-h-80 max-h-[calc(100svh-14rem)] overflow-auto">
             <table className="w-full border-collapse text-sm">
               <thead className="sticky top-0 z-20">
                 <tr className="text-left text-muted-foreground">
@@ -364,7 +364,7 @@ export function CorporationsView() {
                       key={col.key}
                       className={cn(
                         "border-b border-border bg-muted/70 px-3 py-2.5 align-middle font-medium backdrop-blur",
-                        col.sticky && "sticky z-10",
+                        col.sticky && "sm:sticky sm:z-10",
                       )}
                       style={{
                         minWidth: col.minWidth,
@@ -437,7 +437,7 @@ export function CorporationsView() {
                           key={col.key}
                           className={cn(
                             "whitespace-nowrap px-3 py-2.5 text-foreground",
-                            col.sticky && "sticky z-10 bg-card group-hover:bg-accent",
+                            col.sticky && "sm:sticky sm:z-10 bg-card group-hover:bg-accent",
                           )}
                           style={{ left: col.sticky ? stickyOffsets[col.key as string] : undefined }}
                         >
@@ -528,14 +528,14 @@ export function CorporationsView() {
       </Dialog>
 
       <Dialog open={!!detail} onOpenChange={(o) => { if (!o) { setDetail(null); setIsEditing(false); setDeleteConfirm(false); setSaveError(null) } }}>
-        <DialogContent className="max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-3xl">
+        <DialogContent className="sm:max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-3xl">
           <DialogHeader className="border-b border-border px-6 py-4">
             <DialogTitle className="text-base font-semibold">법인 상세 정보</DialogTitle>
           </DialogHeader>
 
           {detail && (
             <>
-              <div className="flex max-h-[calc(90svh-9rem)] flex-col overflow-y-auto px-6 py-5">
+              <div className="flex max-h-[calc(75dvh-9rem)] sm:max-h-[calc(90svh-9rem)] flex-col overflow-y-auto px-6 py-5">
                 <div className="flex flex-col gap-4">
 
                   {/* 기본 정보 – 수정/저장/취소 버튼 위치 */}

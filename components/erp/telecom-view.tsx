@@ -158,7 +158,7 @@ function TelecomDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>통신비 등록</DialogTitle>
         </DialogHeader>
@@ -401,14 +401,14 @@ export function TelecomView() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-0.5">
           <h2 className="text-xl font-semibold tracking-tight text-foreground">통신비</h2>
           <p className="text-sm text-muted-foreground">
             {loading ? "불러오는 중..." : `전체 ${rows.length}건 · 현재 ${filteredRows.length}건 표시`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {bulkMode ? (
             <>
               {selectedIds.size > 0 && (
@@ -469,7 +469,7 @@ export function TelecomView() {
 
       <Card className="overflow-hidden py-0 shadow-sm">
         <CardContent className="p-0">
-          <div className="min-h-80 overflow-auto">
+          <div className="min-h-80 max-h-[calc(100svh-14rem)] overflow-auto">
             <table className="w-full border-collapse text-sm">
               <thead className="sticky top-0 z-20">
                 <tr className="text-left text-muted-foreground">
@@ -487,7 +487,7 @@ export function TelecomView() {
                       key={col.key}
                       className={cn(
                         "border-b border-border bg-muted/70 px-3 py-2.5 align-middle font-medium backdrop-blur",
-                        colIdx < 3 && "sticky z-10",
+                        colIdx < 3 && "sm:sticky sm:z-10",
                       )}
                       style={{
                         minWidth: col.minWidth,
@@ -554,7 +554,7 @@ export function TelecomView() {
                           key={col.key}
                           className={cn(
                             "whitespace-nowrap px-3 py-2.5 text-foreground",
-                            colIdx < 3 && "sticky z-10 bg-card group-hover:bg-accent",
+                            colIdx < 3 && "sm:sticky sm:z-10 bg-card group-hover:bg-accent",
                           )}
                           style={{ left: colIdx < 3 ? stickyOffsets[colIdx] : undefined }}
                         >
@@ -598,14 +598,14 @@ export function TelecomView() {
       </Dialog>
 
       <Dialog open={!!detail} onOpenChange={(o) => { if (!o) setDetail(null) }}>
-        <DialogContent className="max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <DialogContent className="sm:max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-2xl">
           <DialogHeader className="border-b border-border px-6 py-4">
             <DialogTitle className="text-base font-semibold">통신비 상세</DialogTitle>
           </DialogHeader>
 
           {detail && (
             <>
-              <div className="flex max-h-[calc(90svh-9rem)] flex-col overflow-y-auto px-6 py-5">
+              <div className="flex max-h-[calc(75dvh-9rem)] sm:max-h-[calc(90svh-9rem)] flex-col overflow-y-auto px-6 py-5">
                 <div className="flex flex-col gap-5">
                   {editMode ? (
                     <div className="flex flex-col gap-4">
@@ -760,3 +760,5 @@ export function TelecomView() {
     </div>
   )
 }
+
+

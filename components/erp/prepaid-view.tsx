@@ -330,14 +330,14 @@ export function PrepaidView() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-0.5">
           <h2 className="text-xl font-semibold tracking-tight text-foreground">선지급 내역</h2>
           <p className="text-sm text-muted-foreground">
             {loading ? "불러오는 중..." : `전체 ${summaries.length}명 · 현재 ${filteredSummaries.length}명 표시`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {bulkMode ? (
             <>
               {selectedKeys.size > 0 && (
@@ -413,7 +413,7 @@ export function PrepaidView() {
 
       <Card className="overflow-hidden py-0 shadow-sm">
         <CardContent className="p-0">
-          <div className="min-h-80 overflow-auto">
+          <div className="min-h-80 max-h-[calc(100svh-14rem)] overflow-auto">
             <table className="w-full border-collapse text-sm">
               <thead className="sticky top-0 z-20">
                 <tr className="text-left text-muted-foreground">
@@ -548,7 +548,7 @@ export function PrepaidView() {
       </Dialog>
 
       <Dialog open={!!detail} onOpenChange={(o) => { if (!o) closeDetail() }}>
-        <DialogContent className="!w-[70vw] !max-w-[70vw] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:w-[70vw] sm:max-w-[70vw]">
           <DialogHeader>
             <DialogTitle>선지급 상세 정보</DialogTitle>
           </DialogHeader>

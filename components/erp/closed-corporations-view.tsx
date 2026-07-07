@@ -28,11 +28,11 @@ import {
 import { useCorporations } from "@/components/erp/corporations-context"
 
 const statusStyles: Record<string, string> = {
-  활성: "bg-blue-100 text-blue-700",
-  진행중: "bg-yellow-100 text-yellow-700",
-  대기중: "bg-gray-200 text-gray-700",
-  중지: "bg-red-100 text-red-700",
-  폐업: "bg-stone-300 text-stone-700",
+  "활성": "bg-blue-100 text-blue-700",
+  "진행중": "bg-yellow-100 text-yellow-700",
+  "대기중": "bg-gray-200 text-gray-700",
+  "중지": "bg-red-100 text-red-700",
+  "폐업": "bg-stone-300 text-stone-700",
 }
 
 const categoryStyles: Record<string, string> = {
@@ -59,11 +59,11 @@ const columns: Column[] = [
   { key: "intro",       label: "소개",        minWidth: "120px" },
   { key: "name",        label: "법인명",      minWidth: "140px", sticky: true },
   { key: "region",      label: "지역",        minWidth: "120px" },
-  { key: "openDate",    label: "개업일",      minWidth: "120px" },
+  { key: "openDate",    label: "개업연월일",  minWidth: "120px" },
   { key: "startDate",   label: "개시일",      minWidth: "120px" },
-  { key: "bizNo",       label: "사업자 번호", minWidth: "130px" },
-  { key: "corpNo",      label: "법인 번호",   minWidth: "140px" },
-  { key: "ceo",         label: "법인 대표",   minWidth: "100px" },
+  { key: "bizNo",       label: "사업자번호",  minWidth: "130px" },
+  { key: "corpNo",      label: "법인번호",    minWidth: "140px" },
+  { key: "ceo",         label: "법인대표",    minWidth: "100px" },
   { key: "bizAddress",  label: "사업 소재지", minWidth: "200px" },
   { key: "registeredAt",label: "등록일",      minWidth: "110px" },
 ]
@@ -134,7 +134,7 @@ export function ClosedCorporationsView() {
 
       <Card className="overflow-hidden py-0 shadow-sm">
         <CardContent className="p-0">
-          <div className="min-h-80 overflow-auto">
+          <div className="min-h-80 max-h-[calc(100svh-14rem)] overflow-auto">
             <table className="w-full border-collapse text-sm">
               <thead className="sticky top-0 z-20">
                 <tr className="text-left text-muted-foreground">
@@ -143,7 +143,7 @@ export function ClosedCorporationsView() {
                       key={col.key}
                       className={cn(
                         "border-b border-border bg-muted/70 px-3 py-2.5 align-middle font-medium backdrop-blur",
-                        col.sticky && "sticky z-10",
+                        col.sticky && "sm:sticky sm:z-10",
                       )}
                       style={{
                         minWidth: col.minWidth,
@@ -179,7 +179,7 @@ export function ClosedCorporationsView() {
                           key={col.key}
                           className={cn(
                             "whitespace-nowrap px-3 py-2.5 text-foreground",
-                            col.sticky && "sticky z-10 bg-card group-hover:bg-accent",
+                            col.sticky && "sm:sticky sm:z-10 bg-card group-hover:bg-accent",
                           )}
                           style={{ left: col.sticky ? stickyOffsets[col.key] : undefined }}
                         >
@@ -203,13 +203,13 @@ export function ClosedCorporationsView() {
 
       {/* 상세 팝업 */}
       <Dialog open={!!detail} onOpenChange={(o) => { if (!o) setDetail(null) }}>
-        <DialogContent className="max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-3xl">
+        <DialogContent className="sm:max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-3xl">
           <DialogHeader className="border-b border-border px-6 py-4">
             <DialogTitle className="text-base font-semibold">폐업 법인 상세 정보</DialogTitle>
           </DialogHeader>
           {detail && (
             <>
-              <div className="flex max-h-[calc(90svh-9rem)] flex-col overflow-y-auto px-6 py-5">
+              <div className="flex max-h-[calc(75dvh-9rem)] sm:max-h-[calc(90svh-9rem)] flex-col overflow-y-auto px-6 py-5">
                 <div className="flex flex-col gap-4">
                   <ClosedSection title="기본 정보">
                     <DF label="구분"><CategoryBadge category={detail.category} /></DF>
@@ -218,22 +218,22 @@ export function ClosedCorporationsView() {
                     <DF label="법인명" value={detail.name} />
                     <DF label="소개" value={detail.intro} className="col-span-2" />
                     <DF label="지역" value={detail.region} />
-                    <DF label="개업일" value={detail.openDate} />
+                    <DF label="개업연월일" value={detail.openDate} />
                     <DF label="개시일" value={detail.startDate} />
-                    <DF label="사업자 번호" value={detail.bizNo} />
-                    <DF label="법인 번호" value={detail.corpNo} />
+                    <DF label="사업자번호" value={detail.bizNo} />
+                    <DF label="법인번호" value={detail.corpNo} />
                   </ClosedSection>
-                  <ClosedSection title="대표 / 임원 정보">
-                    <DF label="법인 대표" value={detail.ceo} />
+                  <ClosedSection title="대표 / 주주 정보">
+                    <DF label="법인대표" value={detail.ceo} />
                     <DF label="감사/사내이사" value={detail.auditorDirector} />
                     <DF label="주주" value={detail.shareholder} />
                     <DF label="생년월일" value={detail.birthDate} />
-                    <DF label="휴대폰 번호" value={detail.phone} />
-                    <DF label="휴대폰 요금제" value={detail.phonePlan} />
+                    <DF label="휴대폰번호" value={detail.phone} />
+                    <DF label="휴대폰요금제" value={detail.phonePlan} />
                   </ClosedSection>
-                  <ClosedSection title="사업장 정보">
+                  <ClosedSection title="사업자 정보">
                     <DF label="사업 소재지" value={detail.bizAddress} className="col-span-2" />
-                    <DF label="사업자 메일" value={detail.bizEmail} />
+                    <DF label="사업자 메일주소" value={detail.bizEmail} />
                     <DF label="계좌번호" value={detail.account} className="col-span-2" />
                   </ClosedSection>
                   <ClosedSection title="인증서">
@@ -241,12 +241,12 @@ export function ClosedCorporationsView() {
                     <DF label="개인 인증서" value={detail.certPersonal} />
                     <DF label="인증서 만료일" value={detail.certExpiry} />
                   </ClosedSection>
-                  <ClosedSection title="인터넷 등기소">
+                  <ClosedSection title="아이로스 계정정보">
                     <DF label="아이디" value={detail.iros} />
                     <DF label="비밀번호" value={detail.irosPw} />
                     <DF label="사용자 등록번호" value={detail.irosUserNo} />
                   </ClosedSection>
-                  <ClosedSection title="홈택스 계정">
+                  <ClosedSection title="홈택스 관리">
                     <DF label="홈택스 아이디" value={detail.hometaxId} />
                     <DF label="홈택스 비밀번호" value={detail.hometaxPw} />
                   </ClosedSection>
@@ -265,7 +265,7 @@ export function ClosedCorporationsView() {
                   className="text-blue-600 border-blue-300 hover:bg-blue-50"
                   onClick={() => { setRestoreTarget(detail); setRestoreStatus("활성") }}
                 >
-                  법인 관리로 복원
+                  법인 활성으로 복원
                 </Button>
                 <Button variant="outline" onClick={() => setDetail(null)}>닫기</Button>
               </DialogFooter>
@@ -282,7 +282,7 @@ export function ClosedCorporationsView() {
           </DialogHeader>
           <div className="flex flex-col gap-4 py-2 text-sm text-muted-foreground">
             <p>
-              <span className="font-medium text-foreground">{restoreTarget?.name}</span>을(를) 법인 관리로 복원합니다.
+              <span className="font-medium text-foreground">{restoreTarget?.name}</span>을 법인 활성으로 복원합니다.
             </p>
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs text-muted-foreground">복원 후 상태</Label>

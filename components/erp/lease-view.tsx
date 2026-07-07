@@ -319,14 +319,14 @@ export function LeaseView() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-0.5">
           <h2 className="text-xl font-semibold tracking-tight text-foreground">임대차 현황</h2>
           <p className="text-sm text-muted-foreground">
             {loading ? "불러오는 중..." : `전체 ${rows.length}건 · 현재 ${filteredRows.length}건 표시`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {bulkMode ? (
             <>
               {selectedIds.size > 0 && (
@@ -395,7 +395,7 @@ export function LeaseView() {
 
       <Card className="overflow-hidden py-0 shadow-sm">
         <CardContent className="p-0">
-          <div className="min-h-80 overflow-auto">
+          <div className="min-h-80 max-h-[calc(100svh-14rem)] overflow-auto">
             <table className="w-full border-collapse text-sm">
               <thead className="sticky top-0 z-20">
                 <tr className="text-left text-muted-foreground">
@@ -413,7 +413,7 @@ export function LeaseView() {
                       key={col.key}
                       className={cn(
                         "border-b border-border bg-muted/70 px-3 py-2.5 align-middle font-medium backdrop-blur",
-                        colIdx < 2 && "sticky z-10",
+                        colIdx < 2 && "sm:sticky sm:z-10",
                       )}
                       style={{ minWidth: col.minWidth, left: colIdx < 2 ? stickyOffsets[colIdx] : undefined }}
                     >
@@ -482,7 +482,7 @@ export function LeaseView() {
                           key={col.key}
                           className={cn(
                             "whitespace-nowrap px-3 py-2.5 text-foreground",
-                            colIdx < 2 && "sticky z-10 bg-card group-hover:bg-accent",
+                            colIdx < 2 && "sm:sticky sm:z-10 bg-card group-hover:bg-accent",
                           )}
                           style={{ left: colIdx < 2 ? stickyOffsets[colIdx] : undefined }}
                         >
@@ -548,7 +548,7 @@ export function LeaseView() {
       </Dialog>
 
       <Dialog open={!!detail} onOpenChange={(o) => { if (!o) { setDetail(null); setEditMode(false); setSubmitError(null) } }}>
-        <DialogContent className="!w-[50vw] !max-w-[50vw] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:w-[60vw] sm:max-w-[60vw]">
           <DialogHeader>
             <div className="flex items-center justify-between pr-6">
               <DialogTitle>임대차 상세 정보</DialogTitle>
@@ -678,7 +678,7 @@ export function LeaseView() {
       </Dialog>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="!w-[50vw] !max-w-[50vw] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:w-[60vw] sm:max-w-[60vw]">
           <DialogHeader>
             <DialogTitle>임대차 등록</DialogTitle>
           </DialogHeader>

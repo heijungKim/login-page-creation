@@ -286,12 +286,12 @@ export function OperatingCostView() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-0.5">
           <h2 className="text-xl font-semibold tracking-tight text-foreground">운영비 관리</h2>
           <p className="text-sm text-muted-foreground">법인별 입출금 내역을 관리합니다.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {bulkMode ? (
             <>
               {selectedIds.size > 0 && (
@@ -573,7 +573,7 @@ export function OperatingCostView() {
           {/* 내역 테이블 */}
           <Card className="overflow-hidden py-0 shadow-sm">
             <CardContent className="p-0">
-              <div className="overflow-auto">
+              <div className="min-h-80 max-h-[calc(100svh-14rem)] overflow-auto">
                 <table className="w-full border-collapse text-sm">
                   <thead className="sticky top-0 z-10">
                     <tr className="border-b border-border bg-muted/70 text-left text-muted-foreground">

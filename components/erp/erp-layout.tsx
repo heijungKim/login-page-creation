@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { ErpSidebar, menuItems } from "@/components/erp/erp-sidebar"
 import { ErpHeader } from "@/components/erp/erp-header"
+import { BottomNav } from "@/components/erp/bottom-nav"
 import { DashboardView } from "@/components/erp/dashboard-view"
 import { MenuView } from "@/components/erp/menu-view"
 import { CorporationsView } from "@/components/erp/corporations-view"
@@ -70,7 +71,7 @@ export function ErpLayout({ onLogout }: { onLogout: () => void }) {
           />
         )}
 
-        <ErpSidebar active={active} onSelect={handleSelect} open={sidebarOpen} />
+        <ErpSidebar active={active} onSelect={handleSelect} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         <div className="flex min-w-0 flex-1 flex-col">
           <ErpHeader
@@ -78,7 +79,7 @@ export function ErpLayout({ onLogout }: { onLogout: () => void }) {
             onLogout={onLogout}
             onMenuToggle={() => setSidebarOpen((o) => !o)}
           />
-          <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
+          <main className="flex-1 overflow-y-auto p-3 pb-20 sm:p-4 sm:pb-20 md:p-6 md:pb-6">
             {active === "dashboard" ? (
               <DashboardView />
             ) : active === "corporations" ? (
@@ -110,6 +111,12 @@ export function ErpLayout({ onLogout }: { onLogout: () => void }) {
             )}
           </main>
         </div>
+
+        <BottomNav
+          active={active}
+          onSelect={handleSelect}
+          onMore={() => setSidebarOpen(true)}
+        />
       </div>
     </CorporationsProvider>
   )
