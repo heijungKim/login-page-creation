@@ -777,7 +777,7 @@ export function CorporationsView() {
                   <p className="text-sm text-destructive">{saveError}</p>
                 </div>
               )}
-              <DialogFooter className="border-t border-border px-6 py-5">
+              <DialogFooter className="border-t border-border px-6 pt-5 pb-8 gap-3">
                 <div className="flex w-full items-center gap-3">
                   <Button
                     variant="outline"
