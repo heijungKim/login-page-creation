@@ -15,6 +15,8 @@ import { useCorporations } from "@/components/erp/corporations-context"
 import { OcrPreviewDialog, type OcrData } from "@/components/erp/corporation-form-dialog"
 
 type LinkedCorp = { id: number; name: string }
+type PgEntry = { id: number; pgCompanyName: string }
+type PgCompany = { id: number; name: string }
 
 type TradingCorp = {
   id: number
@@ -34,6 +36,7 @@ type TradingCorp = {
   registeredAt: string
   subsidiaries: LinkedCorp[]
   giftCorps: LinkedCorp[]
+  pgs: PgEntry[]
 }
 
 const TRADING_TYPE_OPTIONS = ["매입", "매출", "매입/매출", "기타"]
@@ -83,6 +86,172 @@ function Field({ id, label, value, onChange, placeholder }: {
   )
 }
 
+// PG 섹션 컴포넌트
+function PgSection({
+  pgs,
+  pgCompanies,
+  onAdd,
+  onRemove,
+  onAddCompany,
+}: {
+  pgs: PgEntry[]
+  pgCompanies: PgCompany[]
+  onAdd: (name: string) => void
+  onRemove: (id: number) => void
+  onAddCompany: (name: string) => Promise<void>
+}) {
+  const [newCompanyOpen, setNewCompanyOpen] = useState(false)
+  const [newCompanyName, setNewCompanyName] = useState("")
+  const [adding, setAdding] = useState(false)
+
+  async function handleAddCompany() {
+    const trimmed = newCompanyName.trim()
+    if (!trimmed) return
+    setAdding(true)
+    await onAddCompany(trimmed)
+    onAdd(trimmed)
+    setNewCompanyName("")
+    setNewCompanyOpen(false)
+    setAdding(false)
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">PG</span>
+      {/* 현재 PG 목록 */}
+      {pgs.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {pgs.map((pg) => (
+            <span key={pg.id} className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-3 py-1 text-xs font-medium text-violet-700">
+              {pg.pgCompanyName}
+              <button type="button" onClick={() => onRemove(pg.id)} className="hover:text-violet-900 ml-0.5">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {/* PG 추가 */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <select
+          className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+          defaultValue=""
+          onChange={(e) => { if (e.target.value) { onAdd(e.target.value); e.target.value = "" } }}
+        >
+          <option value="" disabled>PG사 선택</option>
+          {pgCompanies
+            .filter((c) => !pgs.some((p) => p.pgCompanyName === c.name))
+            .map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+        </select>
+        <Button type="button" size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setNewCompanyOpen(true)}>
+          <Plus className="h-3 w-3" />
+          PG사 추가
+        </Button>
+      </div>
+      {/* 새 PG사 입력 인라인 */}
+      {newCompanyOpen && (
+        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-2">
+          <Input
+            className="h-8 flex-1 text-sm"
+            placeholder="새 PG사 이름 입력"
+            value={newCompanyName}
+            onChange={(e) => setNewCompanyName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleAddCompany() }}
+            autoFocus
+          />
+          <Button size="sm" className="h-8 text-xs" disabled={adding || !newCompanyName.trim()} onClick={handleAddCompany}>
+            {adding ? "저장 중..." : "저장"}
+          </Button>
+          <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setNewCompanyOpen(false); setNewCompanyName("") }}>취소</Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 등록 폼용 PG 섹션 (ID 없이 이름만 관리)
+function PgSectionForm({
+  pgNames,
+  pgCompanies,
+  onChange,
+  onAddCompany,
+}: {
+  pgNames: string[]
+  pgCompanies: PgCompany[]
+  onChange: (names: string[]) => void
+  onAddCompany: (name: string) => Promise<void>
+}) {
+  const [newCompanyOpen, setNewCompanyOpen] = useState(false)
+  const [newCompanyName, setNewCompanyName] = useState("")
+  const [adding, setAdding] = useState(false)
+
+  async function handleAddCompany() {
+    const trimmed = newCompanyName.trim()
+    if (!trimmed) return
+    setAdding(true)
+    await onAddCompany(trimmed)
+    if (!pgNames.includes(trimmed)) onChange([...pgNames, trimmed])
+    setNewCompanyName("")
+    setNewCompanyOpen(false)
+    setAdding(false)
+  }
+
+  return (
+    <div className="col-span-1 sm:col-span-2 flex flex-col gap-2 rounded-md border border-border bg-muted/20 p-3">
+      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">PG</span>
+      {pgNames.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {pgNames.map((name) => (
+            <span key={name} className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-3 py-1 text-xs font-medium text-violet-700">
+              {name}
+              <button type="button" onClick={() => onChange(pgNames.filter((n) => n !== name))} className="hover:text-violet-900 ml-0.5">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-2 flex-wrap">
+        <select
+          className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+          defaultValue=""
+          onChange={(e) => {
+            if (e.target.value && !pgNames.includes(e.target.value)) {
+              onChange([...pgNames, e.target.value])
+            }
+            e.target.value = ""
+          }}
+        >
+          <option value="" disabled>PG사 선택</option>
+          {pgCompanies.filter((c) => !pgNames.includes(c.name)).map((c) => (
+            <option key={c.id} value={c.name}>{c.name}</option>
+          ))}
+        </select>
+        <Button type="button" size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setNewCompanyOpen(true)}>
+          <Plus className="h-3 w-3" />
+          PG사 추가
+        </Button>
+      </div>
+      {newCompanyOpen && (
+        <div className="flex items-center gap-2 rounded-md border border-border bg-background p-2">
+          <Input
+            className="h-8 flex-1 text-sm"
+            placeholder="새 PG사 이름 입력"
+            value={newCompanyName}
+            onChange={(e) => setNewCompanyName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleAddCompany() }}
+            autoFocus
+          />
+          <Button size="sm" className="h-8 text-xs" disabled={adding || !newCompanyName.trim()} onClick={handleAddCompany}>
+            {adding ? "저장 중..." : "저장"}
+          </Button>
+          <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setNewCompanyOpen(false); setNewCompanyName("") }}>취소</Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function TradingCorporationsView() {
   const { rows: allCorps } = useCorporations()
 
@@ -96,6 +265,7 @@ export function TradingCorporationsView() {
   )
 
   const [rows, setRows] = useState<TradingCorp[]>([])
+  const [pgCompanies, setPgCompanies] = useState<PgCompany[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<Partial<Record<ColKey, string>>>({})
@@ -105,8 +275,9 @@ export function TradingCorporationsView() {
   const [detail, setDetail] = useState<TradingCorp | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [editForm, setEditForm] = useState<FormData>(emptyForm())
+  // 상세 팝업의 PG 로컬 상태 (저장 즉시 반영)
+  const [detailPgs, setDetailPgs] = useState<PgEntry[]>([])
 
-  // 연결 법인 로컬 상태
   const [linkedSubs, setLinkedSubs] = useState<LinkedCorp[]>([])
   const [linkedGifts, setLinkedGifts] = useState<LinkedCorp[]>([])
   const [linkSaving, setLinkSaving] = useState(false)
@@ -114,6 +285,7 @@ export function TradingCorporationsView() {
 
   const [addOpen, setAddOpen] = useState(false)
   const [addForm, setAddForm] = useState<FormData>(emptyForm())
+  const [addPgNames, setAddPgNames] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
@@ -173,12 +345,17 @@ export function TradingCorporationsView() {
   const load = useCallback(async () => {
     try {
       setLoading(true)
-      const data = await api.get<TradingCorp[]>("/api/trading-corporations")
+      const [data, companies] = await Promise.all([
+        api.get<TradingCorp[]>("/api/trading-corporations"),
+        api.get<PgCompany[]>("/api/pg-companies"),
+      ])
       setRows(Array.isArray(data) ? data.map((r) => ({
         ...r,
         subsidiaries: r.subsidiaries ?? [],
         giftCorps: r.giftCorps ?? [],
+        pgs: r.pgs ?? [],
       })) : [])
+      setPgCompanies(Array.isArray(companies) ? companies : [])
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "불러오기에 실패했습니다.")
     } finally {
@@ -215,9 +392,42 @@ export function TradingCorporationsView() {
       tradingType: row.tradingType, businessType: row.businessType ?? "",
       businessItem: row.businessItem ?? "", note: row.note, openDate: row.openDate ?? "",
     })
+    setDetailPgs(row.pgs ?? [])
     setLinkedSubs(row.subsidiaries ?? [])
     setLinkedGifts(row.giftCorps ?? [])
     setSubmitError(null)
+  }
+
+  async function handleAddPg(tradingCorpId: number, pgCompanyName: string) {
+    try {
+      const pg = await api.post<PgEntry>(`/api/trading-corporations/${tradingCorpId}/pgs`, { pgCompanyName })
+      const newPg = { id: pg.id, pgCompanyName: pg.pgCompanyName }
+      setDetailPgs((prev) => [...prev, newPg])
+      setRows((prev) => prev.map((r) => r.id === tradingCorpId ? { ...r, pgs: [...(r.pgs ?? []), newPg] } : r))
+      setDetail((d) => d ? { ...d, pgs: [...(d.pgs ?? []), newPg] } : d)
+    } catch {
+      // 실패 시 무시
+    }
+  }
+
+  async function handleRemovePg(tradingCorpId: number, pgId: number) {
+    try {
+      await api.delete(`/api/trading-corporations/${tradingCorpId}/pgs/${pgId}`)
+      setDetailPgs((prev) => prev.filter((p) => p.id !== pgId))
+      setRows((prev) => prev.map((r) => r.id === tradingCorpId ? { ...r, pgs: (r.pgs ?? []).filter((p) => p.id !== pgId) } : r))
+      setDetail((d) => d ? { ...d, pgs: (d.pgs ?? []).filter((p) => p.id !== pgId) } : d)
+    } catch {
+      // 실패 시 무시
+    }
+  }
+
+  async function handleAddPgCompany(name: string) {
+    try {
+      const company = await api.post<PgCompany>("/api/pg-companies", { name })
+      setPgCompanies((prev) => prev.some((c) => c.name === name) ? prev : [...prev, company])
+    } catch {
+      // 실패 시 무시
+    }
   }
 
   async function saveLinks(subs: LinkedCorp[], gifts: LinkedCorp[]) {
@@ -324,10 +534,11 @@ export function TradingCorporationsView() {
     setSubmitError(null)
     setSubmitting(true)
     try {
-      const created = await api.post<TradingCorp>("/api/trading-corporations", addForm)
-      setRows((prev) => [{ ...created, subsidiaries: created.subsidiaries ?? [], giftCorps: created.giftCorps ?? [] }, ...prev])
+      const created = await api.post<TradingCorp>("/api/trading-corporations", { ...addForm, pgNames: addPgNames })
+      setRows((prev) => [{ ...created, subsidiaries: created.subsidiaries ?? [], giftCorps: created.giftCorps ?? [], pgs: created.pgs ?? [] }, ...prev])
       setAddOpen(false)
       setAddForm(emptyForm())
+      setAddPgNames([])
     } catch (e) {
       setSubmitError(e instanceof ApiError ? e.message : "등록에 실패했습니다.")
     } finally {
@@ -341,7 +552,7 @@ export function TradingCorporationsView() {
     setSubmitting(true)
     try {
       const updated = await api.put<TradingCorp>(`/api/trading-corporations/${detail.id}`, editForm)
-      const withLinks = { ...updated, subsidiaries: linkedSubs, giftCorps: linkedGifts }
+      const withLinks = { ...updated, subsidiaries: linkedSubs, giftCorps: linkedGifts, pgs: detailPgs }
       setRows((prev) => prev.map((r) => r.id === detail.id ? withLinks : r))
       setDetail(withLinks)
       setEditMode(false)
@@ -374,7 +585,6 @@ export function TradingCorporationsView() {
     const currentYear = new Date().getFullYear()
     const fileName = `E_${cleanBizNo}_${currentYear}${excelQuarter}_1.xlsx`
 
-    // 연결된 하위 법인 전체 데이터 조회
     const subCorpId = corp.subsidiaries?.[0]?.id
     const subCorp = subCorpId ? allCorps.find((c) => c.id === subCorpId) : null
 
@@ -390,23 +600,21 @@ export function TradingCorporationsView() {
       "의뢰업체\nE-Mail주소", "의뢰업체\n코드/구분",
     ]
 
-    // 2행 데이터 (- 와 공백 제거 헬퍼)
     const s = (v: string | undefined | null) => (v ?? "").replace(/[-\s]/g, "")
     const dataRow: string[] = headerTexts.map(() => "")
-    dataRow[0]  = "RD"                                   // 레코드 구분
-    dataRow[1]  = String(currentYear)                    // 결제 연도
-    dataRow[2]  = excelQuarter                           // 분기 구분
-    dataRow[3]  = s(corp.bizNo)                          // 제출자 사업자번호
-    dataRow[4]  = "1"                                    // 일련 번호
-    dataRow[5]  = s(subCorp?.bizNo)                      // 의뢰업체 사업자번호
-    dataRow[6]  = s(subCorp?.residentNo)                 // 의뢰업체 대표자주민번호
-    // dataRow[7]  의뢰업체 관리번호 — 미입력
-    dataRow[17] = s(subCorp?.hometaxId)                  // 의뢰업체 아이디
-    dataRow[18] = s(subCorp?.irosUserNo)                 // 의뢰업체 아이디수
-    dataRow[19] = s(subCorp?.phone)                      // 의뢰업체 전화번호
-    dataRow[20] = s(subCorp?.phone)                      // 의뢰업체 휴대폰번호
-    dataRow[21] = s(subCorp?.bizEmail)                   // 의뢰업체 E-Mail주소
-    dataRow[22] = "C"                                    // 의뢰업체 코드/구분
+    dataRow[0]  = "RD"
+    dataRow[1]  = String(currentYear)
+    dataRow[2]  = excelQuarter
+    dataRow[3]  = s(corp.bizNo)
+    dataRow[4]  = "1"
+    dataRow[5]  = s(subCorp?.bizNo)
+    dataRow[6]  = s(subCorp?.residentNo)
+    dataRow[17] = s(subCorp?.hometaxId)
+    dataRow[18] = s(subCorp?.irosUserNo)
+    dataRow[19] = s(subCorp?.phone)
+    dataRow[20] = s(subCorp?.phone)
+    dataRow[21] = s(subCorp?.bizEmail)
+    dataRow[22] = "C"
 
     const headerStyle = {
       fill: { patternType: "solid", fgColor: { rgb: "FFC000" } },
@@ -484,7 +692,7 @@ export function TradingCorporationsView() {
             <Download className="h-4 w-4 mr-1" />
             엑셀 다운로드
           </Button>
-          <Button size="sm" onClick={() => { setAddForm(emptyForm()); setSubmitError(null); setAddOpen(true) }}>
+          <Button size="sm" onClick={() => { setAddForm(emptyForm()); setAddPgNames([]); setSubmitError(null); setAddOpen(true) }}>
             <Plus className="h-4 w-4 mr-1" />
             거래 법인 등록
           </Button>
@@ -512,12 +720,15 @@ export function TradingCorporationsView() {
                   <th className="border-b border-border bg-muted px-3 py-2.5 align-middle font-medium" style={{ minWidth: "200px" }}>
                     <Input value={giftFilter} onChange={(e) => setGiftFilter(e.target.value)} placeholder="상품권 법인" className="h-8 bg-background text-xs font-normal" />
                   </th>
+                  <th className="border-b border-border bg-muted px-3 py-2.5 align-middle font-medium" style={{ minWidth: "160px" }}>
+                    <div className="h-8 flex items-center px-1 text-xs font-medium text-muted-foreground">PG</div>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={totalCols} className="h-64 px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={totalCols + 1} className="h-64 px-4 py-10 text-center text-muted-foreground">
                       {loading ? "불러오는 중..." : "등록된 거래 법인이 없습니다."}
                     </td>
                   </tr>
@@ -557,6 +768,18 @@ export function TradingCorporationsView() {
                           <div className="flex flex-wrap gap-1">
                             {row.giftCorps.map((c) => (
                               <span key={c.id} className="inline-flex rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">{c.name}</span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      {/* PG */}
+                      <td className="px-3 py-2.5" style={{ minWidth: "160px" }}>
+                        {(row.pgs ?? []).length === 0 ? (
+                          <span className="text-muted-foreground">-</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {row.pgs.map((pg) => (
+                              <span key={pg.id} className="inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700">{pg.pgCompanyName}</span>
                             ))}
                           </div>
                         )}
@@ -632,6 +855,17 @@ export function TradingCorporationsView() {
                     {detail.registeredAt && <p className="col-span-1 sm:col-span-2 text-xs text-muted-foreground">등록일: {detail.registeredAt}</p>}
                   </div>
                 )}
+
+                {/* PG 섹션 */}
+                <div className="border-t border-border pt-4">
+                  <PgSection
+                    pgs={detailPgs}
+                    pgCompanies={pgCompanies}
+                    onAdd={(name) => handleAddPg(detail.id, name)}
+                    onRemove={(pgId) => handleRemovePg(detail.id, pgId)}
+                    onAddCompany={handleAddPgCompany}
+                  />
+                </div>
 
                 {/* 연결 법인 */}
                 {!editMode && (
@@ -805,6 +1039,12 @@ export function TradingCorporationsView() {
               <div className="col-span-1 sm:col-span-2">
                 <Field id="a-note" label="비고" value={addForm.note} onChange={(v) => setAddForm((f) => ({ ...f, note: v }))} />
               </div>
+              <PgSectionForm
+                pgNames={addPgNames}
+                pgCompanies={pgCompanies}
+                onChange={setAddPgNames}
+                onAddCompany={handleAddPgCompany}
+              />
             </div>
           </div>
           <DialogFooter className="border-t border-border px-6 pt-5 pb-8 gap-3">
