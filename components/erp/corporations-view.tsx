@@ -30,6 +30,8 @@ import {
   RegionSelect,
   CATEGORY_OPTIONS,
   STATUS_OPTIONS,
+  SIDO_LIST,
+  SIGUNGU_MAP,
   formatResidentNo,
   type Corporation,
   type Shareholder,
@@ -136,6 +138,8 @@ export function CorporationsView() {
   const { rows, loading, error, refresh, createCorporation, updateCorporation, removeCorporation } = useCorporations()
   const [open, setOpen] = useState(false)
   const [filters, setFilters] = useState<Record<string, string>>({})
+  const [regionSido, setRegionSido] = useState("")
+  const [regionSigungu, setRegionSigungu] = useState("")
   const [detail, setDetail] = useState<Corporation | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<Corporation | null>(null)
@@ -238,9 +242,18 @@ export function CorporationsView() {
       return i === -1 ? list.length : i
     }
 
+    const regionFilter = regionSigungu
+      ? `${regionSido} ${regionSigungu}`
+      : regionSido
+
     return activeRows
-      .filter((row) =>
-        columns.every((col) => {
+      .filter((row) => {
+        if (regionFilter) {
+          const rowRegion = row.region ?? ""
+          if (!rowRegion.startsWith(regionFilter)) return false
+        }
+        return columns.every((col) => {
+          if (col.key === "region") return true // 별도 처리
           const term = filters[col.key]?.trim()
           if (!term) return true
           if (col.filterOptions) {
@@ -250,8 +263,8 @@ export function CorporationsView() {
             ? shareholdersText(row)
             : String(row[col.key] ?? "")
           return cellText.toLowerCase().includes(term.toLowerCase())
-        }),
-      )
+        })
+      })
       .sort((a, b) => {
         const catDiff = orderIndex(categoryOrder, a.category) - orderIndex(categoryOrder, b.category)
         if (catDiff !== 0) return catDiff
@@ -259,7 +272,7 @@ export function CorporationsView() {
         if (stDiff !== 0) return stDiff
         return (b.registeredAt ?? "").localeCompare(a.registeredAt ?? "")
       })
-  }, [activeRows, filters])
+  }, [activeRows, filters, regionSido, regionSigungu])
 
   return (
     <div className="flex flex-col gap-5">
@@ -377,7 +390,37 @@ export function CorporationsView() {
                         left: col.sticky ? stickyOffsets[col.key as string] : undefined,
                       }}
                     >
-                      {col.filterOptions ? (
+                      {col.key === "region" ? (
+                        <div className="flex flex-col gap-1">
+                          <select
+                            value={regionSido}
+                            onChange={(e) => { setRegionSido(e.target.value); setRegionSigungu("") }}
+                            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground"
+                          >
+                            <option value="">시/도</option>
+                            {SIDO_LIST.map((s) => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                          {regionSido && (SIGUNGU_MAP[regionSido] ?? []).length > 0 && (
+                            <select
+                              value={regionSigungu}
+                              onChange={(e) => setRegionSigungu(e.target.value)}
+                              className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground"
+                            >
+                              <option value="">시/군/구 전체</option>
+                              {(SIGUNGU_MAP[regionSido] ?? []).map((s) => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          )}
+                          {regionSido && (
+                            <button
+                              type="button"
+                              onClick={() => { setRegionSido(""); setRegionSigungu("") }}
+                              className="text-[10px] text-muted-foreground underline text-left hover:text-foreground"
+                            >
+                              초기화
+                            </button>
+                          )}
+                        </div>
+                      ) : col.filterOptions ? (
                         <Select
                           value={filters[col.key] || "__all__"}
                           onValueChange={(v) => setFilter(col.key, v === "__all__" ? "" : v)}
