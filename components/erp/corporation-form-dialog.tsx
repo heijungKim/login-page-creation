@@ -23,14 +23,82 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
-export const CATEGORY_OPTIONS = ["운영 법인", "하위 법인", "상품권 법인", "계약법인(영세)"]
+export const CATEGORY_OPTIONS = ["운영 법인", "하위 법인", "상품권 법인", "계약법인(영세)", "기타"]
 export const STATUS_OPTIONS = ["활성", "진행중", "대기중", "중지", "폐업"]
+
+export const SIDO_LIST = [
+  "서울특별시", "부산광역시", "대구광역시", "인천광역시", "광주광역시",
+  "대전광역시", "울산광역시", "세종특별자치시",
+  "경기도", "강원특별자치도", "충청북도", "충청남도",
+  "전북특별자치도", "전라남도", "경상북도", "경상남도", "제주특별자치도",
+]
+
+export const SIGUNGU_MAP: Record<string, string[]> = {
+  "서울특별시": ["종로구","중구","용산구","성동구","광진구","동대문구","중랑구","성북구","강북구","도봉구","노원구","은평구","서대문구","마포구","양천구","강서구","구로구","금천구","영등포구","동작구","관악구","서초구","강남구","송파구","강동구"],
+  "부산광역시": ["중구","서구","동구","영도구","부산진구","동래구","남구","북구","해운대구","사하구","금정구","강서구","연제구","수영구","사상구","기장군"],
+  "대구광역시": ["중구","동구","서구","남구","북구","수성구","달서구","달성군"],
+  "인천광역시": ["중구","동구","미추홀구","연수구","남동구","부평구","계양구","서구","강화군","옹진군"],
+  "광주광역시": ["동구","서구","남구","북구","광산구"],
+  "대전광역시": ["동구","중구","서구","유성구","대덕구"],
+  "울산광역시": ["중구","남구","동구","북구","울주군"],
+  "세종특별자치시": [],
+  "경기도": ["수원시","성남시","의정부시","안양시","부천시","광명시","평택시","동두천시","안산시","고양시","과천시","구리시","남양주시","오산시","시흥시","군포시","의왕시","하남시","용인시","파주시","이천시","안성시","김포시","화성시","광주시","양주시","포천시","여주시","양평군","가평군","연천군"],
+  "강원특별자치도": ["춘천시","원주시","강릉시","동해시","태백시","속초시","삼척시","홍천군","횡성군","영월군","평창군","정선군","철원군","화천군","양구군","인제군","고성군","양양군"],
+  "충청북도": ["청주시","충주시","제천시","보은군","옥천군","영동군","증평군","진천군","괴산군","음성군","단양군"],
+  "충청남도": ["천안시","공주시","보령시","아산시","서산시","논산시","계룡시","당진시","금산군","부여군","서천군","청양군","홍성군","예산군","태안군"],
+  "전북특별자치도": ["전주시","군산시","익산시","정읍시","남원시","김제시","완주군","진안군","무주군","장수군","임실군","순창군","고창군","부안군"],
+  "전라남도": ["목포시","여수시","순천시","나주시","광양시","담양군","곡성군","구례군","고흥군","보성군","화순군","장흥군","강진군","해남군","영암군","무안군","함평군","영광군","장성군","완도군","진도군","신안군"],
+  "경상북도": ["포항시","경주시","김천시","안동시","구미시","영주시","영천시","상주시","문경시","경산시","군위군","의성군","청송군","영양군","영덕군","청도군","고령군","성주군","칠곡군","예천군","봉화군","울진군","울릉군"],
+  "경상남도": ["창원시","진주시","통영시","사천시","김해시","밀양시","거제시","양산시","의령군","함안군","창녕군","고성군","남해군","하동군","산청군","함양군","거창군","합천군"],
+  "제주특별자치도": ["제주시","서귀포시"],
+}
+
+function parseRegion(value: string): { sido: string; sigungu: string } {
+  if (!value) return { sido: "", sigungu: "" }
+  for (const sido of SIDO_LIST) {
+    if (value === sido) return { sido, sigungu: "" }
+    if (value.startsWith(sido + " ")) return { sido, sigungu: value.slice(sido.length + 1) }
+  }
+  return { sido: "", sigungu: "" }
+}
+
+export function RegionSelect({ value, onChange, className }: {
+  value: string
+  onChange: (v: string) => void
+  className?: string
+}) {
+  const { sido, sigungu } = parseRegion(value)
+  const sigunguList = SIGUNGU_MAP[sido] ?? []
+  return (
+    <div className={cn("flex flex-col gap-2 sm:flex-row", className)}>
+      <select
+        value={sido}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+      >
+        <option value="">시/도 선택</option>
+        {SIDO_LIST.map((s) => <option key={s} value={s}>{s}</option>)}
+      </select>
+      {sido && sigunguList.length > 0 && (
+        <select
+          value={sigungu}
+          onChange={(e) => onChange(sido + (e.target.value ? " " + e.target.value : ""))}
+          className="h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+        >
+          <option value="">시/군/구 선택</option>
+          {sigunguList.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      )}
+    </div>
+  )
+}
 
 export type Shareholder = { name: string; equity: string }
 
 export type Corporation = {
   id?: number
   category: string
+  categoryNote?: string
   status: string
   name: string
   intro: string
@@ -71,6 +139,7 @@ export type Corporation = {
 
 const emptyForm: Corporation = {
   category: "운영 법인",
+  categoryNote: "",
   status: "활성",
   name: "",
   intro: "",
@@ -299,12 +368,17 @@ export function CorporationFormDialog({
             <Section title="기본 정보">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="category" className="text-xs text-muted-foreground">구분</Label>
-                <Select value={form.category} onValueChange={(v) => set("category", v)}>
-                  <SelectTrigger id="category"><SelectValue placeholder="구분 선택" /></SelectTrigger>
-                  <SelectContent>
-                    {CATEGORY_OPTIONS.map((opt) => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  <Select value={form.category} onValueChange={(v) => set("category", v)}>
+                    <SelectTrigger id="category"><SelectValue placeholder="구분 선택" /></SelectTrigger>
+                    <SelectContent>
+                      {CATEGORY_OPTIONS.map((opt) => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {form.category === "기타" && (
+                    <Input id="categoryNote" value={form.categoryNote ?? ""} onChange={(e) => set("categoryNote", e.target.value)} placeholder="내용 입력" />
+                  )}
+                </div>
               </div>
               <Field id="name" label="법인명" value={form.name} onChange={(v) => set("name", v)} placeholder="예: 한빛컴퍼니" required error={fieldErrors.name} />
               <Field id="intro" label="소개" value={form.intro} onChange={(v) => set("intro", v)} placeholder="법인 소개" />
@@ -323,7 +397,10 @@ export function CorporationFormDialog({
               {form.status === "폐업" && (
                 <Field id="closeDate" label="폐업일" type="date" value={form.closeDate} onChange={(v) => set("closeDate", v)} />
               )}
-              <Field id="region" label="지역" value={form.region} onChange={(v) => set("region", v)} placeholder="예: 서울 강남구" />
+              <div className="flex flex-col gap-1.5 col-span-1 sm:col-span-2">
+                <Label className="text-xs text-muted-foreground">지역</Label>
+                <RegionSelect value={form.region} onChange={(v) => set("region", v)} />
+              </div>
               <Field id="openDate" label="개업일" type="date" value={form.openDate} onChange={(v) => set("openDate", v)} />
               <Field id="startDate" label="개시일" type="date" value={form.startDate} onChange={(v) => set("startDate", v)} />
               <Field id="bizNo" label="사업자 번호" value={form.bizNo} onChange={(v) => set("bizNo", v)} placeholder="000-00-00000" required error={fieldErrors.bizNo} />

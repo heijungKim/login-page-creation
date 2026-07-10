@@ -19,6 +19,7 @@ import { ClosedCorporationsView } from "@/components/erp/closed-corporations-vie
 import { UserManagementView } from "@/components/erp/user-management-view"
 import { FixedExpenseView } from "@/components/erp/fixed-expense-view"
 import { TaxProgressView } from "@/components/erp/tax-progress-view"
+import { TradingCorporationsView } from "@/components/erp/trading-corporations-view"
 
 const validIds = new Set(menuItems.map((m) => m.id))
 
@@ -104,6 +105,8 @@ export function ErpLayout({ onLogout }: { onLogout: () => void }) {
               <FixedExpenseView />
             ) : active === "tax-progress" ? (
               <TaxProgressView />
+            ) : active === "trading-corporations" ? (
+              <TradingCorporationsView />
             ) : active === "user-management" ? (
               <UserManagementView />
             ) : (

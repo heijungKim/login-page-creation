@@ -88,13 +88,13 @@ function daysUntil(dateStr: string | null): number | null {
 const BADGE_KEYS = ["category", "corpName", "status", "deposit", "monthlyRent", "sharedOfficeName", "contractEnd"]
 
 type FormData = {
-  category: string; corpName: string; ceoName: string; location: string
+  category: string; categoryNote: string; corpName: string; ceoName: string; location: string
   contractStart: string; contractEnd: string; deposit: string; monthlyRent: string
   paymentDay: string; contact: string; emergencyContact: string; sharedOfficeName: string; pinned: boolean; status: string
 }
 
 const emptyForm: FormData = {
-  category: "운영법인", corpName: "", ceoName: "", location: "",
+  category: "운영법인", categoryNote: "", corpName: "", ceoName: "", location: "",
   contractStart: "", contractEnd: "", deposit: "", monthlyRent: "",
   paymentDay: "", contact: "", emergencyContact: "", sharedOfficeName: "", pinned: false, status: "계약중",
 }
@@ -102,6 +102,7 @@ const emptyForm: FormData = {
 function toRequest(form: FormData) {
   return {
     category: form.category,
+    categoryNote: form.categoryNote || null,
     corpName: form.corpName.trim(),
     ceoName: form.ceoName,
     location: form.location,
@@ -120,7 +121,7 @@ function toRequest(form: FormData) {
 
 function toFormData(row: LeaseEntry): FormData {
   return {
-    category: row.category, corpName: row.corpName, ceoName: row.ceoName,
+    category: row.category, categoryNote: row.categoryNote ?? "", corpName: row.corpName, ceoName: row.ceoName,
     location: row.location,
     contractStart: row.contractStart ?? "",
     contractEnd: row.contractEnd ?? "",
@@ -586,7 +587,18 @@ export function LeaseView() {
                 <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
                   {editMode ? (
                     <>
-                      <SelectField id="d-category" label="구분" value={detailForm.category} onChange={(v) => setDetailField("category", v)} options={CATEGORY_OPTIONS} />
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="d-category" className="text-xs text-muted-foreground">구분</Label>
+                        <div className="flex gap-2">
+                          <select id="d-category" value={detailForm.category} onChange={(e) => setDetailField("category", e.target.value)}
+                            className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground">
+                            {CATEGORY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                          {detailForm.category === "기타" && (
+                            <Input id="d-categoryNote" value={detailForm.categoryNote} onChange={(e) => setDetailField("categoryNote", e.target.value)} placeholder="내용 입력" className="h-10" />
+                          )}
+                        </div>
+                      </div>
                       <Field id="d-corpName" label="법인명" value={detailForm.corpName} onChange={(v) => setDetailField("corpName", v)} />
                       <Field id="d-ceoName" label="대표자명" value={detailForm.ceoName} onChange={(v) => setDetailField("ceoName", v)} />
                       <Field id="d-contact" label="연락처" value={detailForm.contact} onChange={(v) => setDetailField("contact", v)} />
@@ -687,7 +699,18 @@ export function LeaseView() {
             <div className="rounded-lg border border-border bg-muted/30 p-4">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">기본 정보</p>
               <div className="grid grid-cols-2 gap-x-8 gap-y-2.5 text-sm">
-                <SelectField id="r-category" label="구분" value={form.category} onChange={(v) => set("category", v)} options={CATEGORY_OPTIONS} />
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="r-category" className="text-xs text-muted-foreground">구분</Label>
+                  <div className="flex gap-2">
+                    <select id="r-category" value={form.category} onChange={(e) => set("category", e.target.value)}
+                      className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground">
+                      {CATEGORY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                    {form.category === "기타" && (
+                      <Input id="r-categoryNote" value={form.categoryNote} onChange={(e) => set("categoryNote", e.target.value)} placeholder="내용 입력" className="h-10" />
+                    )}
+                  </div>
+                </div>
                 <Field id="r-corpName" label="법인명 *" value={form.corpName} onChange={(v) => set("corpName", v)} placeholder="법인명 입력" />
                 <Field id="r-ceoName" label="대표자명" value={form.ceoName} onChange={(v) => set("ceoName", v)} placeholder="홍길동" />
                 <Field id="r-contact" label="연락처" value={form.contact} onChange={(v) => set("contact", v)} placeholder="010-0000-0000" />

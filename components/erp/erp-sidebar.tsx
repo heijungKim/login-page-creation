@@ -15,6 +15,7 @@ import {
   CalendarCheck,
   Users,
   X,
+  Briefcase,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -60,6 +61,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { id: "business-income", label: "사업소득", icon: TrendingUp },
       { id: "tax-progress", label: "월 세무 진행현황", icon: CalendarCheck },
+      { id: "trading-corporations", label: "거래 법인", icon: Briefcase },
     ],
   },
   {

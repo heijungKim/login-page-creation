@@ -1,0 +1,785 @@
+"use client"
+
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { Download, Plus, Trash2, X } from "lucide-react"
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const XLSX = require("xlsx-js-style")
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { cn } from "@/lib/utils"
+import { ApiError, api } from "@/lib/api"
+import { useCorporations } from "@/components/erp/corporations-context"
+
+type LinkedCorp = { id: number; name: string }
+
+type TradingCorp = {
+  id: number
+  name: string
+  bizNo: string
+  ceo: string
+  contact: string
+  email: string
+  address: string
+  account: string
+  tradingType: string
+  note: string
+  registeredAt: string
+  subsidiaries: LinkedCorp[]
+  giftCorps: LinkedCorp[]
+}
+
+const TRADING_TYPE_OPTIONS = ["매입", "매출", "매입/매출", "기타"]
+
+const columns = [
+  { key: "name",         label: "법인명",      minWidth: "150px" },
+  { key: "tradingType",  label: "거래 유형",   minWidth: "110px" },
+  { key: "bizNo",        label: "사업자번호",  minWidth: "140px" },
+  { key: "ceo",          label: "대표자",      minWidth: "110px" },
+  { key: "contact",      label: "연락처",      minWidth: "140px" },
+  { key: "email",        label: "이메일",      minWidth: "200px" },
+  { key: "address",      label: "주소",        minWidth: "220px" },
+  { key: "account",      label: "계좌번호",    minWidth: "200px" },
+  { key: "note",         label: "비고",        minWidth: "160px" },
+  { key: "registeredAt", label: "등록일",      minWidth: "120px" },
+] as const
+
+type ColKey = (typeof columns)[number]["key"]
+
+const tradingTypeStyle: Record<string, string> = {
+  "매입": "bg-blue-100 text-blue-700",
+  "매출": "bg-emerald-100 text-emerald-700",
+  "매입/매출": "bg-indigo-100 text-indigo-700",
+  "기타": "bg-gray-200 text-gray-700",
+}
+
+type FormData = {
+  name: string; bizNo: string; ceo: string; contact: string
+  email: string; address: string; account: string; tradingType: string; note: string
+}
+
+const emptyForm = (): FormData => ({
+  name: "", bizNo: "", ceo: "", contact: "",
+  email: "", address: "", account: "", tradingType: "매입/매출", note: "",
+})
+
+function Field({ id, label, value, onChange, placeholder }: {
+  id: string; label: string; value: string; onChange: (v: string) => void; placeholder?: string
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id} className="text-xs text-muted-foreground">{label}</Label>
+      <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+    </div>
+  )
+}
+
+export function TradingCorporationsView() {
+  const { rows: allCorps } = useCorporations()
+
+  const subsidiaryOptions = useMemo(
+    () => allCorps.filter((c) => c.category === "하위 법인" && c.id),
+    [allCorps]
+  )
+  const giftCorpOptions = useMemo(
+    () => allCorps.filter((c) => c.category === "상품권 법인" && c.id),
+    [allCorps]
+  )
+
+  const [rows, setRows] = useState<TradingCorp[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Partial<Record<ColKey, string>>>({})
+  const [subFilter, setSubFilter] = useState("")
+  const [giftFilter, setGiftFilter] = useState("")
+
+  const [detail, setDetail] = useState<TradingCorp | null>(null)
+  const [editMode, setEditMode] = useState(false)
+  const [editForm, setEditForm] = useState<FormData>(emptyForm())
+
+  // 연결 법인 로컬 상태
+  const [linkedSubs, setLinkedSubs] = useState<LinkedCorp[]>([])
+  const [linkedGifts, setLinkedGifts] = useState<LinkedCorp[]>([])
+  const [linkSaving, setLinkSaving] = useState(false)
+  const [pendingLink, setPendingLink] = useState<{ type: "sub" | "gift"; corp: LinkedCorp; region: string } | null>(null)
+
+  const [addOpen, setAddOpen] = useState(false)
+  const [addForm, setAddForm] = useState<FormData>(emptyForm())
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+
+  const [excelOpen, setExcelOpen] = useState(false)
+  const [excelCorpId, setExcelCorpId] = useState<number | "">("")
+  const [excelQuarter, setExcelQuarter] = useState("1")
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true)
+      const data = await api.get<TradingCorp[]>("/api/trading-corporations")
+      setRows(Array.isArray(data) ? data.map((r) => ({
+        ...r,
+        subsidiaries: r.subsidiaries ?? [],
+        giftCorps: r.giftCorps ?? [],
+      })) : [])
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "불러오기에 실패했습니다.")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((row) => {
+      const basicMatch = columns.every((col) => {
+        const term = filters[col.key]?.trim()
+        if (!term) return true
+        return String(row[col.key] ?? "").toLowerCase().includes(term.toLowerCase())
+      })
+      if (!basicMatch) return false
+      if (subFilter.trim() && !(row.subsidiaries ?? []).some((c) => c.name.toLowerCase().includes(subFilter.toLowerCase()))) return false
+      if (giftFilter.trim() && !(row.giftCorps ?? []).some((c) => c.name.toLowerCase().includes(giftFilter.toLowerCase()))) return false
+      return true
+    }).sort((a, b) => (b.registeredAt ?? "").localeCompare(a.registeredAt ?? ""))
+  }, [rows, filters, subFilter, giftFilter])
+
+  function setFilter(key: ColKey, value: string) {
+    setFilters((prev) => ({ ...prev, [key]: value }))
+  }
+
+  function openDetail(row: TradingCorp) {
+    setDetail(row)
+    setEditMode(false)
+    setEditForm({
+      name: row.name, bizNo: row.bizNo, ceo: row.ceo, contact: row.contact,
+      email: row.email, address: row.address, account: row.account,
+      tradingType: row.tradingType, note: row.note,
+    })
+    setLinkedSubs(row.subsidiaries ?? [])
+    setLinkedGifts(row.giftCorps ?? [])
+    setSubmitError(null)
+  }
+
+  async function saveLinks(subs: LinkedCorp[], gifts: LinkedCorp[]) {
+    if (!detail) return
+    setLinkSaving(true)
+    try {
+      await api.put(`/api/trading-corporations/${detail.id}/links`, {
+        subsidiaryIds: subs.map((c) => c.id),
+        giftCorpIds: gifts.map((c) => c.id),
+      })
+    } catch {
+      // 링크 저장 실패 시 로컬 상태는 유지
+    } finally {
+      setLinkSaving(false)
+    }
+    const updated = { ...detail, subsidiaries: subs, giftCorps: gifts }
+    setDetail(updated)
+    setRows((prev) => prev.map((r) => r.id === detail.id ? updated : r))
+  }
+
+  function addLinkedSub(corp: LinkedCorp) {
+    const next = [corp]
+    setLinkedSubs(next)
+    saveLinks(next, linkedGifts)
+  }
+
+  function removeLinkedSub(id: number) {
+    const next = linkedSubs.filter((c) => c.id !== id)
+    setLinkedSubs(next)
+    saveLinks(next, linkedGifts)
+  }
+
+  function addLinkedGift(corp: LinkedCorp) {
+    const next = [corp]
+    setLinkedGifts(next)
+    saveLinks(linkedSubs, next)
+  }
+
+  function removeLinkedGift(id: number) {
+    const next = linkedGifts.filter((c) => c.id !== id)
+    setLinkedGifts(next)
+    saveLinks(linkedSubs, next)
+  }
+
+  const REGION_NORMALIZE: Record<string, string> = {
+    "서울특별시": "서울", "부산광역시": "부산", "대구광역시": "대구",
+    "인천광역시": "인천", "광주광역시": "광주", "대전광역시": "대전",
+    "울산광역시": "울산", "세종특별자치시": "세종",
+    "경기도": "경기", "강원도": "강원", "강원특별자치도": "강원",
+    "충청북도": "충북", "충청남도": "충남",
+    "전라북도": "전북", "전라남도": "전남", "전북특별자치도": "전북",
+    "경상북도": "경북", "경상남도": "경남",
+    "제주특별자치도": "제주",
+  }
+
+  function extractCityKey(s: string): string {
+    const first = s.trim().split(/\s+/)[0] ?? ""
+    return REGION_NORMALIZE[first] ?? first
+  }
+
+  function isSameRegion(tradingAddress: string, corpRegion: string, corpBizAddress: string): boolean {
+    const addrKey = extractCityKey(tradingAddress)
+    if (!addrKey) return false
+    const regionSrc = corpRegion.trim() || corpBizAddress.trim()
+    if (!regionSrc) return false
+    const regionKey = extractCityKey(regionSrc)
+    if (!regionKey) return false
+    return addrKey === regionKey || addrKey.includes(regionKey) || regionKey.includes(addrKey)
+  }
+
+  function tryAddLinkedSub(selectedId: string) {
+    const corp = subsidiaryOptions.find((c) => String(c.id) === selectedId)
+    if (!corp || !corp.id) return
+    const link: LinkedCorp = { id: corp.id, name: corp.name }
+    if (isSameRegion(detail?.address ?? "", corp.region ?? "", corp.bizAddress ?? "")) {
+      const regionKey = extractCityKey(corp.region.trim() || corp.bizAddress || detail?.address || "")
+      setPendingLink({ type: "sub", corp: link, region: regionKey })
+      return
+    }
+    addLinkedSub(link)
+  }
+
+  function tryAddLinkedGift(selectedId: string) {
+    const corp = giftCorpOptions.find((c) => String(c.id) === selectedId)
+    if (!corp || !corp.id) return
+    const link: LinkedCorp = { id: corp.id, name: corp.name }
+    if (isSameRegion(detail?.address ?? "", corp.region ?? "", corp.bizAddress ?? "")) {
+      const regionKey = extractCityKey(corp.region.trim() || corp.bizAddress || detail?.address || "")
+      setPendingLink({ type: "gift", corp: link, region: regionKey })
+      return
+    }
+    addLinkedGift(link)
+  }
+
+  function confirmPendingLink() {
+    if (!pendingLink) return
+    if (pendingLink.type === "sub") addLinkedSub(pendingLink.corp)
+    else addLinkedGift(pendingLink.corp)
+    setPendingLink(null)
+  }
+
+  async function handleAdd() {
+    if (!addForm.name.trim()) { setSubmitError("법인명을 입력해주세요."); return }
+    setSubmitError(null)
+    setSubmitting(true)
+    try {
+      const created = await api.post<TradingCorp>("/api/trading-corporations", addForm)
+      setRows((prev) => [{ ...created, subsidiaries: created.subsidiaries ?? [], giftCorps: created.giftCorps ?? [] }, ...prev])
+      setAddOpen(false)
+      setAddForm(emptyForm())
+    } catch (e) {
+      setSubmitError(e instanceof ApiError ? e.message : "등록에 실패했습니다.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleEdit() {
+    if (!detail?.id || !editForm.name.trim()) { setSubmitError("법인명을 입력해주세요."); return }
+    setSubmitError(null)
+    setSubmitting(true)
+    try {
+      const updated = await api.put<TradingCorp>(`/api/trading-corporations/${detail.id}`, editForm)
+      const withLinks = { ...updated, subsidiaries: linkedSubs, giftCorps: linkedGifts }
+      setRows((prev) => prev.map((r) => r.id === detail.id ? withLinks : r))
+      setDetail(withLinks)
+      setEditMode(false)
+    } catch (e) {
+      setSubmitError(e instanceof ApiError ? e.message : "수정에 실패했습니다.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!detail?.id) return
+    setSubmitting(true)
+    try {
+      await api.delete(`/api/trading-corporations/${detail.id}`)
+      setRows((prev) => prev.filter((r) => r.id !== detail.id))
+      setDetail(null)
+      setDeleteConfirm(false)
+    } catch (e) {
+      setSubmitError(e instanceof ApiError ? e.message : "삭제에 실패했습니다.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  function handleExcelDownload() {
+    const corp = rows.find((r) => r.id === excelCorpId)
+    if (!corp) return
+    const cleanBizNo = corp.bizNo.replace(/-/g, "")
+    const currentYear = new Date().getFullYear()
+    const fileName = `E_${cleanBizNo}_${currentYear}${excelQuarter}_1.xlsx`
+
+    // 연결된 하위 법인 전체 데이터 조회
+    const subCorpId = corp.subsidiaries?.[0]?.id
+    const subCorp = subCorpId ? allCorps.find((c) => c.id === subCorpId) : null
+
+    const headerTexts = [
+      "레코드\n구분", "결제\n연도", "분기\n구분", "제출자\n사업자번호", "일련\n번호",
+      "의뢰업체\n사업자번호", "의뢰업체\n대표자주민번호", "의뢰업체\n관리번호",
+      "결재대행\n년월", "결제구분", "결재대행\n건수",
+      "봉사료금액\n음수표시", "봉사료금액",
+      "봉사료제외금액\n음수표시", "봉사료제외금액",
+      "결재대행금액\n음수표시", "결재대행금액",
+      "의뢰업체\n아이디", "의뢰업체\n아이디수",
+      "의뢰업체\n전화번호", "의뢰업체\n휴대폰번호",
+      "의뢰업체\nE-Mail주소", "의뢰업체\n코드/구분",
+    ]
+
+    // 2행 데이터
+    const dataRow: string[] = headerTexts.map(() => "")
+    dataRow[0]  = "RD"                                   // 레코드 구분
+    dataRow[1]  = String(currentYear)                    // 결제 연도
+    dataRow[2]  = excelQuarter                           // 분기 구분
+    dataRow[3]  = corp.bizNo                             // 제출자 사업자번호
+    dataRow[4]  = "1"                                    // 일련 번호
+    dataRow[5]  = subCorp?.bizNo ?? ""                   // 의뢰업체 사업자번호
+    dataRow[6]  = subCorp?.residentNo ?? ""              // 의뢰업체 대표자주민번호
+    // dataRow[7]  의뢰업체 관리번호 — 미입력
+    dataRow[17] = subCorp?.hometaxId ?? ""               // 의뢰업체 아이디
+    dataRow[18] = subCorp?.irosUserNo ?? ""              // 의뢰업체 아이디수
+    dataRow[19] = subCorp?.phone ?? ""                   // 의뢰업체 전화번호
+    dataRow[20] = subCorp?.phone ?? ""                   // 의뢰업체 휴대폰번호
+    dataRow[21] = subCorp?.bizEmail ?? ""                // 의뢰업체 E-Mail주소
+    dataRow[22] = "C"                                    // 의뢰업체 코드/구분
+
+    const headerStyle = {
+      fill: { patternType: "solid", fgColor: { rgb: "FFC000" } },
+      font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "000000" } },
+      alignment: { horizontal: "center", vertical: "center", wrapText: true },
+      border: {
+        top:    { style: "thin", color: { rgb: "000000" } },
+        bottom: { style: "thin", color: { rgb: "000000" } },
+        left:   { style: "thin", color: { rgb: "000000" } },
+        right:  { style: "thin", color: { rgb: "000000" } },
+      },
+    }
+
+    const dataStyle = {
+      font: { name: "맑은 고딕", sz: 10 },
+      alignment: { horizontal: "center", vertical: "center" },
+      border: {
+        top:    { style: "thin", color: { rgb: "CCCCCC" } },
+        bottom: { style: "thin", color: { rgb: "CCCCCC" } },
+        left:   { style: "thin", color: { rgb: "CCCCCC" } },
+        right:  { style: "thin", color: { rgb: "CCCCCC" } },
+      },
+    }
+
+    const colWidths = headerTexts.map((h) => ({
+      wch: h.includes("대표자주민번호") ? 20
+         : h.includes("E-Mail") ? 35
+         : h.includes("사업자번호") || h.includes("전화번호") || h.includes("휴대폰번호") ? 20
+         : h.includes("봉사료제외금액") || h.includes("결재대행금액") ? 16
+         : h.includes("봉사료금액") ? 14
+         : 10,
+    }))
+
+    const ws: Record<string, unknown> = {
+      "!ref": XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 1, c: headerTexts.length - 1 } }),
+      "!cols": colWidths,
+      "!rows": [{ hpt: 40 }, { hpt: 20 }],
+    }
+
+    headerTexts.forEach((text, i) => {
+      ws[XLSX.utils.encode_cell({ r: 0, c: i })] = { v: text, t: "s", s: headerStyle }
+    })
+    dataRow.forEach((val, i) => {
+      ws[XLSX.utils.encode_cell({ r: 1, c: i })] = { v: val, t: "s", s: dataStyle }
+    })
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Sheet1")
+    XLSX.writeFile(wb, fileName)
+    setExcelOpen(false)
+  }
+
+  const totalCols = columns.length + 2
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <h2 className="mobile-hidden text-xl font-semibold tracking-tight text-foreground">거래 법인</h2>
+          <p className="text-sm text-muted-foreground">
+            {loading ? "불러오는 중..." : `전체 ${rows.length}건 · 현재 ${filteredRows.length}건 표시`}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => { setExcelCorpId(""); setExcelQuarter("1"); setExcelOpen(true) }}>
+            <Download className="h-4 w-4 mr-1" />
+            엑셀 다운로드
+          </Button>
+          <Button size="sm" onClick={() => { setAddForm(emptyForm()); setSubmitError(null); setAddOpen(true) }}>
+            <Plus className="h-4 w-4 mr-1" />
+            거래 법인 등록
+          </Button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">{error}</div>
+      )}
+
+      <Card className="overflow-hidden py-0 shadow-sm">
+        <CardContent className="p-0">
+          <div className="min-h-80 max-h-[calc(100svh-14rem)] overflow-auto">
+            <table className="w-full border-separate border-spacing-0 text-sm">
+              <thead className="sticky top-0 z-20 bg-muted">
+                <tr className="text-left text-muted-foreground">
+                  {columns.map((col) => (
+                    <th key={col.key} className="border-b border-border bg-muted px-3 py-2.5 align-middle font-medium" style={{ minWidth: col.minWidth }}>
+                      <Input value={filters[col.key] ?? ""} onChange={(e) => setFilter(col.key, e.target.value)} placeholder={col.label} className="h-8 bg-background text-xs font-normal" />
+                    </th>
+                  ))}
+                  <th className="border-b border-border bg-muted px-3 py-2.5 align-middle font-medium" style={{ minWidth: "200px" }}>
+                    <Input value={subFilter} onChange={(e) => setSubFilter(e.target.value)} placeholder="하위 법인" className="h-8 bg-background text-xs font-normal" />
+                  </th>
+                  <th className="border-b border-border bg-muted px-3 py-2.5 align-middle font-medium" style={{ minWidth: "200px" }}>
+                    <Input value={giftFilter} onChange={(e) => setGiftFilter(e.target.value)} placeholder="상품권 법인" className="h-8 bg-background text-xs font-normal" />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={totalCols} className="h-64 px-4 py-10 text-center text-muted-foreground">
+                      {loading ? "불러오는 중..." : "등록된 거래 법인이 없습니다."}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredRows.map((row) => (
+                    <tr key={row.id} className="cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-accent/50" onClick={() => openDetail(row)}>
+                      {columns.map((col) => (
+                        <td key={col.key} className="whitespace-nowrap px-3 py-2.5 text-foreground" style={{ minWidth: col.minWidth }}>
+                          {col.key === "tradingType" ? (
+                            <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", tradingTypeStyle[row.tradingType] ?? "bg-muted text-muted-foreground")}>{row.tradingType}</span>
+                          ) : col.key === "name" ? (
+                            <span className="font-medium">{row.name}</span>
+                          ) : col.key === "note" ? (
+                            <span className="text-muted-foreground">{row[col.key] || "-"}</span>
+                          ) : (
+                            <span>{String(row[col.key] ?? "") || "-"}</span>
+                          )}
+                        </td>
+                      ))}
+                      {/* 하위 법인 */}
+                      <td className="px-3 py-2.5" style={{ minWidth: "200px" }}>
+                        {(row.subsidiaries ?? []).length === 0 ? (
+                          <span className="text-muted-foreground">-</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {row.subsidiaries.map((c) => (
+                              <span key={c.id} className="inline-flex rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700">{c.name}</span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      {/* 상품권 법인 */}
+                      <td className="px-3 py-2.5" style={{ minWidth: "200px" }}>
+                        {(row.giftCorps ?? []).length === 0 ? (
+                          <span className="text-muted-foreground">-</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {row.giftCorps.map((c) => (
+                              <span key={c.id} className="inline-flex rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">{c.name}</span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 상세 팝업 */}
+      <Dialog open={!!detail} onOpenChange={(o) => { if (!o) { setDetail(null); setEditMode(false) } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader className="border-b border-border px-6 py-4">
+            <DialogTitle className="text-base font-semibold">거래 법인 상세</DialogTitle>
+          </DialogHeader>
+          {detail && (
+            <>
+              <div className="flex max-h-[calc(75dvh-10rem)] sm:max-h-[calc(85dvh-10rem)] flex-col gap-4 overflow-y-auto px-6 py-5">
+                {submitError && <p className="text-xs text-destructive">{submitError}</p>}
+
+                {/* 기본 정보 */}
+                {editMode ? (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field id="e-name" label="법인명 *" value={editForm.name} onChange={(v) => setEditForm((f) => ({ ...f, name: v }))} />
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs text-muted-foreground">거래 유형</Label>
+                      <select value={editForm.tradingType} onChange={(e) => setEditForm((f) => ({ ...f, tradingType: e.target.value }))} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground">
+                        {TRADING_TYPE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                    <Field id="e-bizNo" label="사업자번호" value={editForm.bizNo} onChange={(v) => setEditForm((f) => ({ ...f, bizNo: v }))} placeholder="000-00-00000" />
+                    <Field id="e-ceo" label="대표자" value={editForm.ceo} onChange={(v) => setEditForm((f) => ({ ...f, ceo: v }))} />
+                    <Field id="e-contact" label="연락처" value={editForm.contact} onChange={(v) => setEditForm((f) => ({ ...f, contact: v }))} />
+                    <Field id="e-email" label="이메일" value={editForm.email} onChange={(v) => setEditForm((f) => ({ ...f, email: v }))} />
+                    <div className="col-span-1 sm:col-span-2">
+                      <Field id="e-address" label="주소" value={editForm.address} onChange={(v) => setEditForm((f) => ({ ...f, address: v }))} />
+                    </div>
+                    <div className="col-span-1 sm:col-span-2">
+                      <Field id="e-account" label="계좌번호" value={editForm.account} onChange={(v) => setEditForm((f) => ({ ...f, account: v }))} />
+                    </div>
+                    <div className="col-span-1 sm:col-span-2">
+                      <Field id="e-note" label="비고" value={editForm.note} onChange={(v) => setEditForm((f) => ({ ...f, note: v }))} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <DF label="법인명" value={detail.name} />
+                    <DF label="거래 유형">
+                      <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", tradingTypeStyle[detail.tradingType] ?? "bg-muted text-muted-foreground")}>{detail.tradingType}</span>
+                    </DF>
+                    <DF label="사업자번호" value={detail.bizNo} />
+                    <DF label="대표자" value={detail.ceo} />
+                    <DF label="연락처" value={detail.contact} />
+                    <DF label="이메일" value={detail.email} />
+                    <DF label="주소" value={detail.address} className="col-span-1 sm:col-span-2" />
+                    <DF label="계좌번호" value={detail.account} className="col-span-1 sm:col-span-2" />
+                    <DF label="비고" value={detail.note} className="col-span-1 sm:col-span-2" />
+                    {detail.registeredAt && <p className="col-span-1 sm:col-span-2 text-xs text-muted-foreground">등록일: {detail.registeredAt}</p>}
+                  </div>
+                )}
+
+                {/* 연결 법인 */}
+                {!editMode && (
+                  <div className="border-t border-border pt-4 flex flex-col gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">연결 법인</p>
+
+                    {/* 하위 법인 */}
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-xs text-muted-foreground">하위 법인</span>
+                      {linkedSubs.length === 0 ? (
+                        <select
+                          className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+                          defaultValue=""
+                          onChange={(e) => tryAddLinkedSub(e.target.value)}
+                        >
+                          <option value="" disabled>하위 법인 선택</option>
+                          {subsidiaryOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {linkedSubs.map((c) => {
+                            const fullCorp = allCorps.find((ac) => ac.id === c.id)
+                            const address = fullCorp?.bizAddress || fullCorp?.region || ""
+                            return (
+                              <div key={c.id} className="flex flex-col gap-1">
+                                <span className="inline-flex items-center gap-1.5 self-start rounded-full bg-sky-100 px-3 py-1.5 text-sm font-medium text-sky-700">
+                                  {c.name}
+                                  <button type="button" onClick={() => removeLinkedSub(c.id)} className="hover:text-sky-900">
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </span>
+                                {address && <p className="pl-1 text-xs text-muted-foreground">{address}</p>}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 상품권 법인 */}
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-xs text-muted-foreground">상품권 법인</span>
+                      {linkedGifts.length === 0 ? (
+                        <select
+                          className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+                          defaultValue=""
+                          onChange={(e) => tryAddLinkedGift(e.target.value)}
+                        >
+                          <option value="" disabled>상품권 법인 선택</option>
+                          {giftCorpOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {linkedGifts.map((c) => {
+                            const fullCorp = allCorps.find((ac) => ac.id === c.id)
+                            const address = fullCorp?.bizAddress || fullCorp?.region || ""
+                            return (
+                              <div key={c.id} className="flex flex-col gap-1">
+                                <span className="inline-flex items-center gap-1.5 self-start rounded-full bg-orange-100 px-3 py-1.5 text-sm font-medium text-orange-700">
+                                  {c.name}
+                                  <button type="button" onClick={() => removeLinkedGift(c.id)} className="hover:text-orange-900">
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </span>
+                                {address && <p className="pl-1 text-xs text-muted-foreground">{address}</p>}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {linkSaving && <p className="text-xs text-muted-foreground">저장 중...</p>}
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter className="border-t border-border px-6 pt-5 pb-8 gap-3">
+                {editMode ? (
+                  <>
+                    <Button variant="outline" className="flex-1" disabled={submitting} onClick={() => { setEditMode(false); setSubmitError(null) }}>취소</Button>
+                    <Button className="flex-1" disabled={submitting} onClick={handleEdit}>{submitting ? "저장 중..." : "저장"}</Button>
+                  </>
+                ) : (
+                  <div className="flex w-full items-center gap-3">
+                    <Button variant="outline" className="flex-1 gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30" disabled={submitting} onClick={() => setDeleteConfirm(true)}>
+                      <Trash2 className="h-4 w-4" />삭제
+                    </Button>
+                    <Button variant="outline" className="flex-1" onClick={() => setEditMode(true)}>수정</Button>
+                    <Button variant="outline" className="flex-1" onClick={() => setDetail(null)}>닫기</Button>
+                  </div>
+                )}
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 삭제 확인 */}
+      <Dialog open={deleteConfirm} onOpenChange={(o) => { if (!o) setDeleteConfirm(false) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>거래 법인 삭제</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            <span className="font-semibold text-foreground">{detail?.name}</span>을(를) 삭제합니다.<br />
+            삭제된 데이터는 복구할 수 없습니다.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" disabled={submitting} onClick={() => setDeleteConfirm(false)}>취소</Button>
+            <Button variant="destructive" disabled={submitting} onClick={handleDelete}>{submitting ? "삭제 중..." : "삭제"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 주소지 중복 경고 */}
+      <Dialog open={!!pendingLink} onOpenChange={(o) => { if (!o) setPendingLink(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>주소지 확인</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            <span className="font-semibold text-foreground">{pendingLink?.corp.name}</span>의 주소지가 현재 거래 법인과 같은 지역(<span className="font-semibold text-foreground">{pendingLink?.region}</span>)입니다.<br />
+            그래도 등록하겠습니까?
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingLink(null)}>취소</Button>
+            <Button onClick={confirmPendingLink}>등록</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 등록 팝업 */}
+      <Dialog open={addOpen} onOpenChange={(o) => { if (!o) setAddOpen(false) }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader className="border-b border-border px-6 py-4">
+            <DialogTitle className="text-base font-semibold">거래 법인 등록</DialogTitle>
+          </DialogHeader>
+          <div className="flex max-h-[calc(75dvh-10rem)] sm:max-h-[calc(85dvh-10rem)] flex-col gap-4 overflow-y-auto px-6 py-5">
+            {submitError && <p className="text-xs text-destructive">{submitError}</p>}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field id="a-name" label="법인명 *" value={addForm.name} onChange={(v) => setAddForm((f) => ({ ...f, name: v }))} />
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs text-muted-foreground">거래 유형</Label>
+                <select value={addForm.tradingType} onChange={(e) => setAddForm((f) => ({ ...f, tradingType: e.target.value }))} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground">
+                  {TRADING_TYPE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <Field id="a-bizNo" label="사업자번호" value={addForm.bizNo} onChange={(v) => setAddForm((f) => ({ ...f, bizNo: v }))} placeholder="000-00-00000" />
+              <Field id="a-ceo" label="대표자" value={addForm.ceo} onChange={(v) => setAddForm((f) => ({ ...f, ceo: v }))} />
+              <Field id="a-contact" label="연락처" value={addForm.contact} onChange={(v) => setAddForm((f) => ({ ...f, contact: v }))} />
+              <Field id="a-email" label="이메일" value={addForm.email} onChange={(v) => setAddForm((f) => ({ ...f, email: v }))} />
+              <div className="col-span-1 sm:col-span-2">
+                <Field id="a-address" label="주소" value={addForm.address} onChange={(v) => setAddForm((f) => ({ ...f, address: v }))} />
+              </div>
+              <div className="col-span-1 sm:col-span-2">
+                <Field id="a-account" label="계좌번호" value={addForm.account} onChange={(v) => setAddForm((f) => ({ ...f, account: v }))} />
+              </div>
+              <div className="col-span-1 sm:col-span-2">
+                <Field id="a-note" label="비고" value={addForm.note} onChange={(v) => setAddForm((f) => ({ ...f, note: v }))} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="border-t border-border px-6 pt-5 pb-8 gap-3">
+            <Button variant="outline" className="flex-1" disabled={submitting} onClick={() => setAddOpen(false)}>취소</Button>
+            <Button className="flex-1" disabled={submitting} onClick={handleAdd}>{submitting ? "등록 중..." : "등록"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 엑셀 다운로드 */}
+      <Dialog open={excelOpen} onOpenChange={(o) => { if (!o) setExcelOpen(false) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader className="border-b border-border px-6 py-4">
+            <DialogTitle className="text-base font-semibold">엑셀 다운로드</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 px-6 py-5">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-muted-foreground">거래 법인 선택</Label>
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+                value={excelCorpId}
+                onChange={(e) => setExcelCorpId(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="" disabled>법인 선택</option>
+                {rows.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}{r.bizNo ? ` (${r.bizNo})` : ""}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-muted-foreground">분기</Label>
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+                value={excelQuarter}
+                onChange={(e) => setExcelQuarter(e.target.value)}
+              >
+                <option value="1">1분기</option>
+                <option value="2">2분기</option>
+                <option value="3">3분기</option>
+                <option value="4">4분기</option>
+              </select>
+            </div>
+            {excelCorpId && (
+              <p className="text-xs text-muted-foreground">
+                파일명: <span className="font-medium text-foreground">E_{rows.find(r => r.id === excelCorpId)?.bizNo.replace(/-/g, "")}_2026{excelQuarter}_1.xlsx</span>
+              </p>
+            )}
+          </div>
+          <DialogFooter className="border-t border-border px-6 pt-5 pb-8 gap-3">
+            <Button variant="outline" className="flex-1" onClick={() => setExcelOpen(false)}>취소</Button>
+            <Button className="flex-1" disabled={!excelCorpId} onClick={handleExcelDownload}>
+              <Download className="h-4 w-4 mr-1" />
+              다운로드
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+function DF({ label, value, children, className }: {
+  label: string; value?: string; children?: React.ReactNode; className?: string
+}) {
+  return (
+    <div className={cn("flex flex-col gap-0.5", className)}>
+      <span className="text-[11px] text-muted-foreground">{label}</span>
+      {children ?? <span className="text-sm font-medium text-foreground">{value || "-"}</span>}
+    </div>
+  )
+}

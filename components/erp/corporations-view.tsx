@@ -27,6 +27,7 @@ import {
 import {
   CorporationFormDialog,
   ShareholdersEditor,
+  RegionSelect,
   CATEGORY_OPTIONS,
   STATUS_OPTIONS,
   formatResidentNo,
@@ -53,11 +54,13 @@ const categoryStyles: Record<string, string> = {
   "하위 법인": "bg-sky-100 text-sky-700",
   "상품권 법인": "bg-orange-100 text-orange-700",
   "계약법인(영세)": "bg-slate-200 text-slate-700",
+  "기타": "bg-gray-100 text-gray-600",
 }
 
-function CategoryBadge({ category }: { category: string }) {
+function CategoryBadge({ category, categoryNote }: { category: string; categoryNote?: string | null }) {
+  const label = category === "기타" && categoryNote ? `기타(${categoryNote})` : category
   const style = categoryStyles[category] ?? "bg-muted text-muted-foreground"
-  return <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${style}`}>{category}</span>
+  return <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${style}`}>{label}</span>
 }
 
 function parseDate(raw: string | undefined | null): string | null {
@@ -78,6 +81,7 @@ function parseCategory(raw: string): string {
     "계약법인": "계약법인(영세)", "계약법인(영세)": "계약법인(영세)", "영세법인": "계약법인(영세)",
     "하위법인": "하위 법인", "하위 법인": "하위 법인",
     "상품권법인": "상품권 법인", "상품권 법인": "상품권 법인",
+    "기타": "기타",
   }
   if (exact[v]) return exact[v]
   if (v.includes("영세")) return "계약법인(영세)"
@@ -457,7 +461,7 @@ export function CorporationsView() {
                               )}
                             </div>
                           ) : col.key === "category" ? (
-                            <CategoryBadge category={row.category} />
+                            <CategoryBadge category={row.category} categoryNote={row.categoryNote} />
                           ) : col.key === "name" ? (
                             <span className="font-medium text-foreground">{row.name}</span>
                           ) : col.key === "shareholders" ? (
@@ -557,10 +561,15 @@ export function CorporationsView() {
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                         <div className="flex flex-col gap-1.5">
                           <Label className="text-xs text-muted-foreground">구분</Label>
-                          <Select value={editForm.category} onValueChange={(v) => setEdit("category", v ?? "")}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>{CATEGORY_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
-                          </Select>
+                          <div className="flex gap-2">
+                            <Select value={editForm.category} onValueChange={(v) => setEdit("category", v ?? "")}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>{CATEGORY_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+                            </Select>
+                            {editForm.category === "기타" && (
+                              <Input value={editForm.categoryNote ?? ""} onChange={(e) => setEdit("categoryNote", e.target.value)} placeholder="내용 입력" />
+                            )}
+                          </div>
                         </div>
                         <EF label="법인명" value={editForm.name} onChange={(v) => setEdit("name", v)} />
                         <EF label="소개" value={editForm.intro} onChange={(v) => setEdit("intro", v)} />
@@ -577,7 +586,10 @@ export function CorporationsView() {
                         {editForm.status === "폐업" && (
                           <EF label="폐업일" type="date" value={editForm.closeDate} onChange={(v) => setEdit("closeDate", v)} />
                         )}
-                        <EF label="지역" value={editForm.region} onChange={(v) => setEdit("region", v)} />
+                        <div className="flex flex-col gap-1.5 col-span-1 sm:col-span-2">
+                          <Label className="text-xs text-muted-foreground">지역</Label>
+                          <RegionSelect value={editForm.region} onChange={(v) => setEdit("region", v)} />
+                        </div>
                         <EF label="개업일" type="date" value={editForm.openDate} onChange={(v) => setEdit("openDate", v)} />
                         <EF label="개시일" type="date" value={editForm.startDate} onChange={(v) => setEdit("startDate", v)} />
                         <EF label="사업자 번호" value={editForm.bizNo} onChange={(v) => setEdit("bizNo", v)} />
@@ -585,7 +597,7 @@ export function CorporationsView() {
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
-                        <DetailField label="구분"><CategoryBadge category={detail.category} /></DetailField>
+                        <DetailField label="구분"><CategoryBadge category={detail.category} categoryNote={detail.categoryNote} /></DetailField>
                         <DetailField label="법인명" value={detail.name} />
                         <DetailField label="소개" value={detail.intro} />
                         <DetailField label="상태">
