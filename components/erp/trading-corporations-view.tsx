@@ -1,7 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { Download, Plus, Trash2, X } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Download, Loader2, Plus, Trash2, Upload, X } from "lucide-react"
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const XLSX = require("xlsx-js-style")
 import { Button } from "@/components/ui/button"
@@ -114,6 +114,34 @@ export function TradingCorporationsView() {
   const [excelOpen, setExcelOpen] = useState(false)
   const [excelCorpId, setExcelCorpId] = useState<number | "">("")
   const [excelQuarter, setExcelQuarter] = useState("1")
+  const [ocrLoading, setOcrLoading] = useState(false)
+  const [ocrMsg, setOcrMsg] = useState("")
+  const addFileRef = useRef<HTMLInputElement>(null)
+
+  async function handleOcr(e: React.ChangeEvent<HTMLInputElement>, setter: (f: FormData) => void, form: FormData) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setOcrLoading(true)
+    setOcrMsg("")
+    try {
+      const fd = new FormData()
+      fd.append("image", file)
+      const res = await fetch("/api/ocr/business-license", { method: "POST", body: fd })
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      const next = { ...form }
+      if (data.bizNo) next.bizNo = data.bizNo
+      if (data.ceo) next.ceo = data.ceo
+      setter(next)
+      const parts = [data.bizNo ? "사업자번호 ✓" : "", data.ceo ? "대표자명 ✓" : ""].filter(Boolean)
+      setOcrMsg(parts.length ? parts.join(" / ") + " 자동입력 완료" : "추출된 정보가 없습니다.")
+    } catch {
+      setOcrMsg("OCR 처리에 실패했습니다.")
+    } finally {
+      setOcrLoading(false)
+      e.target.value = ""
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -691,6 +719,15 @@ export function TradingCorporationsView() {
           </DialogHeader>
           <div className="flex max-h-[calc(75dvh-10rem)] sm:max-h-[calc(85dvh-10rem)] flex-col gap-4 overflow-y-auto px-6 py-5">
             {submitError && <p className="text-xs text-destructive">{submitError}</p>}
+            {/* 사업자등록증 OCR */}
+            <div className="flex items-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3">
+              <input ref={addFileRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleOcr(e, setAddForm, addForm)} />
+              <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" disabled={ocrLoading} onClick={() => { setOcrMsg(""); addFileRef.current?.click() }}>
+                {ocrLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {ocrLoading ? "분석 중..." : "사업자등록증 업로드"}
+              </Button>
+              <span className="text-xs text-muted-foreground">{ocrMsg || "업로드하면 사업자번호·대표자명을 자동으로 입력합니다."}</span>
+            </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field id="a-name" label="법인명 *" value={addForm.name} onChange={(v) => setAddForm((f) => ({ ...f, name: v }))} />
               <div className="flex flex-col gap-1.5">
