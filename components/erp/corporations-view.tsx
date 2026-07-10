@@ -32,6 +32,7 @@ import {
   STATUS_OPTIONS,
   SIDO_LIST,
   SIGUNGU_MAP,
+  deriveRegion,
   formatResidentNo,
   type Corporation,
   type Shareholder,
@@ -509,6 +510,8 @@ export function CorporationsView() {
                             <CategoryBadge category={row.category} categoryNote={row.categoryNote} />
                           ) : col.key === "name" ? (
                             <span className="font-medium text-foreground">{row.name}</span>
+                          ) : col.key === "region" ? (
+                            <span>{row.region || deriveRegion(row.bizAddress || "") || "-"}</span>
                           ) : col.key === "shareholders" ? (
                             <span>{shareholdersText(row) || "-"}</span>
                           ) : (
@@ -598,7 +601,7 @@ export function CorporationsView() {
                             <Button size="sm" className="h-8 px-3" disabled={submitting} onClick={handleSave}>{submitting ? "저장 중..." : "저장"}</Button>
                           </>
                         ) : (
-                          <Button variant="ghost" size="sm" className="h-8 px-3" onClick={() => { setEditForm({ ...detail }); setIsEditing(true) }}>수정</Button>
+                          <Button variant="ghost" size="sm" className="h-8 px-3" onClick={() => { setEditForm({ ...detail, region: detail.region || deriveRegion(detail.bizAddress || "") }); setIsEditing(true) }}>수정</Button>
                         )}
                       </div>
                     </div>
@@ -664,7 +667,7 @@ export function CorporationsView() {
                         {detail.status === "폐업" && (
                           <DetailField label="폐업일" value={detail.closeDate} />
                         )}
-                        <DetailField label="지역" value={detail.region} />
+                        <DetailField label="지역" value={detail.region || deriveRegion(detail.bizAddress || "")} />
                         <DetailField label="개업일" value={detail.openDate} />
                         <DetailField label="개시일" value={detail.startDate} />
                         <DetailField label="사업자 번호" value={detail.bizNo} />
