@@ -49,7 +49,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OCR_SPACE_KEY: ${OCR_SPACE_KEY}
     depends_on:
       - backend
 

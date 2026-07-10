@@ -25,6 +25,8 @@ type CorporationResponse = {
   bizAddress: string
   bizEmail: string
   account: string
+  businessType: string
+  businessItem: string
   certCorp: string
   certPersonal: string
   certExpiry: string | null
@@ -108,6 +110,8 @@ function fromResponse(r: CorporationResponse): Corporation {
     phonePlan: r.phonePlan,
     bizAddress: r.bizAddress,
     bizEmail: r.bizEmail,
+    businessType: r.businessType ?? "",
+    businessItem: r.businessItem ?? "",
     ...parseAccount(r.account),
     certCorp: r.certCorp,
     certPersonal: r.certPersonal,
@@ -145,6 +149,8 @@ function toRequest(c: Corporation) {
     phonePlan: c.phonePlan,
     bizAddress: c.bizAddress,
     bizEmail: c.bizEmail,
+    businessType: c.businessType || "",
+    businessItem: c.businessItem || "",
     account: JSON.stringify({
       corp: { bank: c.corpBankName, no: c.corpAccountNo, pw: c.corpAccountPw },
       personal: { bank: c.personalBankName, no: c.personalAccountNo, pw: c.personalAccountPw },

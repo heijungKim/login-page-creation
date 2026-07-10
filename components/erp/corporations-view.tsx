@@ -117,6 +117,8 @@ const columns: Column[] = [
   { key: "phonePlan", label: "휴대폰 요금제", minWidth: "120px" },
   { key: "bizAddress", label: "사업 소재지", minWidth: "200px" },
   { key: "bizEmail", label: "사업자 메일", minWidth: "180px" },
+  { key: "businessType", label: "업태", minWidth: "130px" },
+  { key: "businessItem", label: "종목", minWidth: "160px" },
   { key: "corpAccountNo", label: "법인계좌", minWidth: "170px" },
   { key: "certCorp", label: "법인 인증서", minWidth: "160px" },
   { key: "certPersonal", label: "개인 인증서", minWidth: "160px" },
@@ -683,11 +685,15 @@ export function CorporationsView() {
                       <>
                         <EF label="사업 소재지" value={editForm.bizAddress} onChange={(v) => setEdit("bizAddress", v)} className="col-span-2" />
                         <EF label="사업자 메일" value={editForm.bizEmail} onChange={(v) => setEdit("bizEmail", v)} />
+                        <EF label="업태" value={editForm.businessType} onChange={(v) => setEdit("businessType", v)} />
+                        <EF label="종목" value={editForm.businessItem} onChange={(v) => setEdit("businessItem", v)} />
                       </>
                     ) : (
                       <>
                         <DetailField label="사업 소재지" value={detail.bizAddress} className="col-span-2" />
                         <DetailField label="사업자 메일" value={detail.bizEmail} />
+                        <DetailField label="업태" value={detail.businessType} />
+                        <DetailField label="종목" value={detail.businessItem} />
                       </>
                     )}
                   </EditSection>

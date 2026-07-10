@@ -23,6 +23,120 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
+export type OcrData = {
+  name: string
+  bizNo: string
+  corpNo: string
+  ceo: string
+  openDate: string
+  bizAddress: string
+  businessType: string
+  businessItem: string
+}
+
+const OCR_FIELDS: { key: keyof OcrData; label: string }[] = [
+  { key: "name",         label: "법인명" },
+  { key: "bizNo",        label: "사업자번호" },
+  { key: "corpNo",       label: "법인번호" },
+  { key: "ceo",          label: "대표자명" },
+  { key: "openDate",     label: "개업연월일" },
+  { key: "bizAddress",   label: "사업장소재지" },
+  { key: "businessType", label: "업태" },
+  { key: "businessItem", label: "종목" },
+]
+
+export function OcrPreviewDialog({
+  imageUrl,
+  data,
+  onApply,
+  onClose,
+}: {
+  imageUrl: string
+  data: OcrData
+  onApply: (selected: Partial<OcrData>) => void
+  onClose: () => void
+}) {
+  const [checked, setChecked] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {}
+    for (const { key } of OCR_FIELDS) init[key] = !!data[key]
+    return init
+  })
+
+  const selectedCount = Object.values(checked).filter(Boolean).length
+
+  function toggle(key: string) {
+    setChecked((prev) => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  function handleApply() {
+    const selected: Partial<OcrData> = {}
+    for (const { key } of OCR_FIELDS) {
+      if (checked[key] && data[key]) selected[key] = data[key]
+    }
+    onApply(selected)
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="sm:max-w-4xl w-full gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-border px-6 py-4">
+          <DialogTitle>사업자등록증 인식 결과</DialogTitle>
+          <DialogDescription>인식된 항목을 확인하고 적용할 항목을 선택하세요.</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col sm:flex-row max-h-[75vh] overflow-hidden">
+          {/* 이미지 미리보기 */}
+          <div className="sm:w-80 shrink-0 border-b sm:border-b-0 sm:border-r border-border p-4 flex items-start justify-center bg-muted/20 overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={imageUrl} alt="사업자등록증" className="w-full h-full object-contain rounded shadow-sm" style={{ maxHeight: "60vh" }} />
+          </div>
+          {/* 인식 결과 */}
+          <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-1">
+            <p className="text-xs text-muted-foreground mb-3">적용할 항목을 선택하세요.</p>
+            {OCR_FIELDS.map(({ key, label }) => {
+              const val = data[key]
+              const recognized = !!val
+              const on = recognized && checked[key]
+              return (
+                <label
+                  key={key}
+                  className={cn(
+                    "flex items-center gap-3 py-2 border-b border-border/50 last:border-0",
+                    recognized ? "cursor-pointer" : "cursor-default opacity-40",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded shrink-0"
+                    checked={on}
+                    disabled={!recognized}
+                    onChange={() => recognized && toggle(key)}
+                  />
+                  <span className="w-24 shrink-0 text-xs text-muted-foreground">{label}</span>
+                  <span className="text-xs text-muted-foreground">=</span>
+                  <span className={cn("flex-1 text-sm truncate", recognized ? "font-medium text-foreground" : "italic text-muted-foreground")}>
+                    {val || "인식 안됨"}
+                  </span>
+                  {recognized && (
+                    <span className={cn("shrink-0 text-[11px] font-medium px-1.5 py-0.5 rounded-full", on ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>
+                      {on ? "적용" : "제외"}
+                    </span>
+                  )}
+                </label>
+              )
+            })}
+          </div>
+        </div>
+        <DialogFooter className="border-t border-border px-6 py-4 gap-2">
+          <Button variant="outline" onClick={onClose}>취소</Button>
+          <Button onClick={handleApply} disabled={selectedCount === 0}>
+            {selectedCount}개 항목 적용
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export const CATEGORY_OPTIONS = ["운영 법인", "하위 법인", "상품권 법인", "계약법인(영세)", "기타"]
 export const STATUS_OPTIONS = ["활성", "진행중", "대기중", "중지", "폐업"]
 
@@ -123,6 +237,8 @@ export type Corporation = {
   phonePlan: string
   bizAddress: string
   bizEmail: string
+  businessType: string
+  businessItem: string
   corpBankName: string
   corpAccountNo: string
   corpAccountPw: string
@@ -164,6 +280,8 @@ const emptyForm: Corporation = {
   phonePlan: "",
   bizAddress: "",
   bizEmail: "",
+  businessType: "",
+  businessItem: "",
   corpBankName: "",
   corpAccountNo: "",
   corpAccountPw: "",
@@ -323,11 +441,13 @@ export function CorporationFormDialog({
   const [apiError, setApiError] = useState<string | null>(null)
   const [ocrLoading, setOcrLoading] = useState(false)
   const [ocrMsg, setOcrMsg] = useState("")
+  const [ocrPreview, setOcrPreview] = useState<{ imageUrl: string; data: OcrData } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function handleOcr(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    const imageUrl = URL.createObjectURL(file)
     setOcrLoading(true)
     setOcrMsg("")
     try {
@@ -336,32 +456,40 @@ export function CorporationFormDialog({
       const res = await fetch("/api/ocr/business-license", { method: "POST", body: fd })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
-
-      const LABEL: Record<string, string> = {
-        name: "법인명", bizNo: "사업자번호", corpNo: "법인번호",
-        ceo: "대표자명", openDate: "개업일", bizAddress: "사업장소재지", region: "지역",
-      }
-      const updates: Partial<Corporation> = {}
-      if (data.name)       updates.name       = data.name
-      if (data.bizNo)      updates.bizNo      = data.bizNo
-      if (data.corpNo)     updates.corpNo     = data.corpNo
-      if (data.ceo)        updates.ceo        = data.ceo
-      if (data.openDate)   updates.openDate   = data.openDate
-      if (data.bizAddress) updates.bizAddress = data.bizAddress
-      if (data.bizAddress) {
-        const region = deriveRegion(data.bizAddress)
-        if (region) updates.region = region
-      }
-
-      setForm(prev => ({ ...prev, ...updates }))
-      const filled = Object.keys(updates).map(k => LABEL[k]).filter(Boolean)
-      setOcrMsg(filled.length ? filled.join(" · ") + " 자동입력 완료" : "추출된 정보가 없습니다.")
+      setOcrPreview({ imageUrl, data })
     } catch {
       setOcrMsg("OCR 처리에 실패했습니다.")
+      URL.revokeObjectURL(imageUrl)
     } finally {
       setOcrLoading(false)
       e.target.value = ""
     }
+  }
+
+  function handleOcrApply(selected: Partial<OcrData>) {
+    const LABEL: Record<string, string> = {
+      name: "법인명", bizNo: "사업자번호", corpNo: "법인번호",
+      ceo: "대표자명", openDate: "개업일", bizAddress: "사업장소재지",
+      businessType: "업태", businessItem: "종목",
+    }
+    const updates: Partial<Corporation> = {}
+    if (selected.name)         updates.name         = selected.name
+    if (selected.bizNo)        updates.bizNo        = selected.bizNo
+    if (selected.corpNo)       updates.corpNo       = selected.corpNo
+    if (selected.ceo)          updates.ceo          = selected.ceo
+    if (selected.openDate)     updates.openDate     = selected.openDate
+    if (selected.bizAddress)   updates.bizAddress   = selected.bizAddress
+    if (selected.businessType) updates.businessType = selected.businessType
+    if (selected.businessItem) updates.businessItem = selected.businessItem
+    if (selected.bizAddress) {
+      const region = deriveRegion(selected.bizAddress)
+      if (region) updates.region = region
+    }
+    setForm((prev) => ({ ...prev, ...updates }))
+    const filled = Object.keys(selected).map((k) => LABEL[k]).filter(Boolean)
+    setOcrMsg(filled.length ? filled.join(" · ") + " 자동입력 완료" : "")
+    if (ocrPreview?.imageUrl) URL.revokeObjectURL(ocrPreview.imageUrl)
+    setOcrPreview(null)
   }
 
   function set<K extends keyof Corporation>(key: K, value: Corporation[K]) {
@@ -406,6 +534,15 @@ export function CorporationFormDialog({
   }
 
   return (
+    <>
+    {ocrPreview && (
+      <OcrPreviewDialog
+        imageUrl={ocrPreview.imageUrl}
+        data={ocrPreview.data}
+        onApply={handleOcrApply}
+        onClose={() => { URL.revokeObjectURL(ocrPreview.imageUrl); setOcrPreview(null) }}
+      />
+    )}
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-3xl">
         <DialogHeader className="border-b border-border px-6 py-4">
@@ -492,6 +629,8 @@ export function CorporationFormDialog({
             <Section title="사업장 / 연락 정보">
               <Field id="bizAddress" label="사업 소재지" value={form.bizAddress} onChange={(v) => set("bizAddress", v)} placeholder="도로명 주소" />
               <Field id="bizEmail" label="사업자 메일주소" type="email" value={form.bizEmail} onChange={(v) => set("bizEmail", v)} placeholder="name@company.com" />
+              <Field id="businessType" label="업태" value={form.businessType} onChange={(v) => set("businessType", v)} placeholder="예: 서비스업" />
+              <Field id="businessItem" label="종목" value={form.businessItem} onChange={(v) => set("businessItem", v)} placeholder="예: 소프트웨어 개발" />
             </Section>
 
             <Section title="법인 계좌">
@@ -547,5 +686,6 @@ export function CorporationFormDialog({
         </form>
       </DialogContent>
     </Dialog>
+    </>
   )
 }

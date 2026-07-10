@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { cn } from "@/lib/utils"
 import { ApiError, api } from "@/lib/api"
 import { useCorporations } from "@/components/erp/corporations-context"
+import { OcrPreviewDialog, type OcrData } from "@/components/erp/corporation-form-dialog"
 
 type LinkedCorp = { id: number; name: string }
 
@@ -19,13 +20,17 @@ type TradingCorp = {
   id: number
   name: string
   bizNo: string
+  corpNo: string
   ceo: string
   contact: string
   email: string
   address: string
   account: string
   tradingType: string
+  businessType: string
+  businessItem: string
   note: string
+  openDate: string | null
   registeredAt: string
   subsidiaries: LinkedCorp[]
   giftCorps: LinkedCorp[]
@@ -56,13 +61,15 @@ const tradingTypeStyle: Record<string, string> = {
 }
 
 type FormData = {
-  name: string; bizNo: string; ceo: string; contact: string
-  email: string; address: string; account: string; tradingType: string; note: string
+  name: string; bizNo: string; corpNo: string; ceo: string; contact: string
+  email: string; address: string; account: string; tradingType: string
+  businessType: string; businessItem: string; note: string; openDate: string
 }
 
 const emptyForm = (): FormData => ({
-  name: "", bizNo: "", ceo: "", contact: "",
-  email: "", address: "", account: "", tradingType: "매입/매출", note: "",
+  name: "", bizNo: "", corpNo: "", ceo: "", contact: "",
+  email: "", address: "", account: "", tradingType: "매입/매출",
+  businessType: "", businessItem: "", note: "", openDate: "",
 })
 
 function Field({ id, label, value, onChange, placeholder }: {
@@ -116,11 +123,13 @@ export function TradingCorporationsView() {
   const [excelQuarter, setExcelQuarter] = useState("1")
   const [ocrLoading, setOcrLoading] = useState(false)
   const [ocrMsg, setOcrMsg] = useState("")
+  const [ocrPreview, setOcrPreview] = useState<{ imageUrl: string; data: OcrData; setter: (f: FormData) => void; form: FormData } | null>(null)
   const addFileRef = useRef<HTMLInputElement>(null)
 
   async function handleOcr(e: React.ChangeEvent<HTMLInputElement>, setter: (f: FormData) => void, form: FormData) {
     const file = e.target.files?.[0]
     if (!file) return
+    const imageUrl = URL.createObjectURL(file)
     setOcrLoading(true)
     setOcrMsg("")
     try {
@@ -129,23 +138,36 @@ export function TradingCorporationsView() {
       const res = await fetch("/api/ocr/business-license", { method: "POST", body: fd })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
-      const next = { ...form }
-      const LABEL: Record<string, string> = {
-        name: "법인명", bizNo: "사업자번호", ceo: "대표자명", address: "주소",
-      }
-      const filled: string[] = []
-      if (data.name)       { next.name    = data.name;       filled.push("name") }
-      if (data.bizNo)      { next.bizNo   = data.bizNo;      filled.push("bizNo") }
-      if (data.ceo)        { next.ceo     = data.ceo;        filled.push("ceo") }
-      if (data.bizAddress) { next.address = data.bizAddress; filled.push("address") }
-      setter(next)
-      setOcrMsg(filled.length ? filled.map(k => LABEL[k]).join(" · ") + " 자동입력 완료" : "추출된 정보가 없습니다.")
+      setOcrPreview({ imageUrl, data, setter, form })
     } catch {
       setOcrMsg("OCR 처리에 실패했습니다.")
+      URL.revokeObjectURL(imageUrl)
     } finally {
       setOcrLoading(false)
       e.target.value = ""
     }
+  }
+
+  function handleOcrApply(selected: Partial<OcrData>) {
+    if (!ocrPreview) return
+    const next = { ...ocrPreview.form }
+    if (selected.name)         next.name         = selected.name
+    if (selected.bizNo)        next.bizNo        = selected.bizNo
+    if (selected.corpNo)       next.corpNo       = selected.corpNo
+    if (selected.ceo)          next.ceo          = selected.ceo
+    if (selected.bizAddress)   next.address      = selected.bizAddress
+    if (selected.openDate)     next.openDate     = selected.openDate
+    if (selected.businessType) next.businessType = selected.businessType
+    if (selected.businessItem) next.businessItem = selected.businessItem
+    ocrPreview.setter(next)
+    const LABEL: Record<string, string> = {
+      name: "법인명", bizNo: "사업자번호", corpNo: "법인번호", ceo: "대표자명",
+      bizAddress: "주소", openDate: "개업일", businessType: "업태", businessItem: "종목",
+    }
+    const filled = Object.keys(selected).map((k) => LABEL[k]).filter(Boolean)
+    setOcrMsg(filled.length ? filled.join(" · ") + " 자동입력 완료" : "")
+    URL.revokeObjectURL(ocrPreview.imageUrl)
+    setOcrPreview(null)
   }
 
   const load = useCallback(async () => {
@@ -188,9 +210,10 @@ export function TradingCorporationsView() {
     setDetail(row)
     setEditMode(false)
     setEditForm({
-      name: row.name, bizNo: row.bizNo, ceo: row.ceo, contact: row.contact,
+      name: row.name, bizNo: row.bizNo, corpNo: row.corpNo ?? "", ceo: row.ceo, contact: row.contact,
       email: row.email, address: row.address, account: row.account,
-      tradingType: row.tradingType, note: row.note,
+      tradingType: row.tradingType, businessType: row.businessType ?? "",
+      businessItem: row.businessItem ?? "", note: row.note, openDate: row.openDate ?? "",
     })
     setLinkedSubs(row.subsidiaries ?? [])
     setLinkedGifts(row.giftCorps ?? [])
@@ -438,6 +461,15 @@ export function TradingCorporationsView() {
   const totalCols = columns.length + 2
 
   return (
+    <>
+    {ocrPreview && (
+      <OcrPreviewDialog
+        imageUrl={ocrPreview.imageUrl}
+        data={ocrPreview.data}
+        onApply={handleOcrApply}
+        onClose={() => { URL.revokeObjectURL(ocrPreview.imageUrl); setOcrPreview(null) }}
+      />
+    )}
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between gap-2">
         <div className="flex flex-col gap-0.5 min-w-0">
@@ -559,9 +591,16 @@ export function TradingCorporationsView() {
                       </select>
                     </div>
                     <Field id="e-bizNo" label="사업자번호" value={editForm.bizNo} onChange={(v) => setEditForm((f) => ({ ...f, bizNo: v }))} placeholder="000-00-00000" />
+                    <Field id="e-corpNo" label="법인번호" value={editForm.corpNo} onChange={(v) => setEditForm((f) => ({ ...f, corpNo: v }))} placeholder="000000-0000000" />
                     <Field id="e-ceo" label="대표자" value={editForm.ceo} onChange={(v) => setEditForm((f) => ({ ...f, ceo: v }))} />
                     <Field id="e-contact" label="연락처" value={editForm.contact} onChange={(v) => setEditForm((f) => ({ ...f, contact: v }))} />
                     <Field id="e-email" label="이메일" value={editForm.email} onChange={(v) => setEditForm((f) => ({ ...f, email: v }))} />
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="e-openDate" className="text-xs text-muted-foreground">개업일</Label>
+                      <Input id="e-openDate" type="date" value={editForm.openDate} onChange={(e) => setEditForm((f) => ({ ...f, openDate: e.target.value }))} />
+                    </div>
+                    <Field id="e-businessType" label="업태" value={editForm.businessType} onChange={(v) => setEditForm((f) => ({ ...f, businessType: v }))} placeholder="예: 서비스업" />
+                    <Field id="e-businessItem" label="종목" value={editForm.businessItem} onChange={(v) => setEditForm((f) => ({ ...f, businessItem: v }))} placeholder="예: 소프트웨어 개발" />
                     <div className="col-span-1 sm:col-span-2">
                       <Field id="e-address" label="주소" value={editForm.address} onChange={(v) => setEditForm((f) => ({ ...f, address: v }))} />
                     </div>
@@ -579,9 +618,13 @@ export function TradingCorporationsView() {
                       <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", tradingTypeStyle[detail.tradingType] ?? "bg-muted text-muted-foreground")}>{detail.tradingType}</span>
                     </DF>
                     <DF label="사업자번호" value={detail.bizNo} />
+                    <DF label="법인번호" value={detail.corpNo} />
                     <DF label="대표자" value={detail.ceo} />
+                    <DF label="개업일" value={detail.openDate ?? ""} />
                     <DF label="연락처" value={detail.contact} />
                     <DF label="이메일" value={detail.email} />
+                    <DF label="업태" value={detail.businessType} />
+                    <DF label="종목" value={detail.businessItem} />
                     <DF label="주소" value={detail.address} className="col-span-1 sm:col-span-2" />
                     <DF label="계좌번호" value={detail.account} className="col-span-1 sm:col-span-2" />
                     <DF label="비고" value={detail.note} className="col-span-1 sm:col-span-2" />
@@ -742,9 +785,16 @@ export function TradingCorporationsView() {
                 </select>
               </div>
               <Field id="a-bizNo" label="사업자번호" value={addForm.bizNo} onChange={(v) => setAddForm((f) => ({ ...f, bizNo: v }))} placeholder="000-00-00000" />
+              <Field id="a-corpNo" label="법인번호" value={addForm.corpNo} onChange={(v) => setAddForm((f) => ({ ...f, corpNo: v }))} placeholder="000000-0000000" />
               <Field id="a-ceo" label="대표자" value={addForm.ceo} onChange={(v) => setAddForm((f) => ({ ...f, ceo: v }))} />
               <Field id="a-contact" label="연락처" value={addForm.contact} onChange={(v) => setAddForm((f) => ({ ...f, contact: v }))} />
               <Field id="a-email" label="이메일" value={addForm.email} onChange={(v) => setAddForm((f) => ({ ...f, email: v }))} />
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="a-openDate" className="text-xs text-muted-foreground">개업일</Label>
+                <Input id="a-openDate" type="date" value={addForm.openDate} onChange={(e) => setAddForm((f) => ({ ...f, openDate: e.target.value }))} />
+              </div>
+              <Field id="a-businessType" label="업태" value={addForm.businessType} onChange={(v) => setAddForm((f) => ({ ...f, businessType: v }))} placeholder="예: 서비스업" />
+              <Field id="a-businessItem" label="종목" value={addForm.businessItem} onChange={(v) => setAddForm((f) => ({ ...f, businessItem: v }))} placeholder="예: 소프트웨어 개발" />
               <div className="col-span-1 sm:col-span-2">
                 <Field id="a-address" label="주소" value={addForm.address} onChange={(v) => setAddForm((f) => ({ ...f, address: v }))} />
               </div>
@@ -812,6 +862,7 @@ export function TradingCorporationsView() {
         </DialogContent>
       </Dialog>
     </div>
+    </>
   )
 }
 
