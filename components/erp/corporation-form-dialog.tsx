@@ -53,6 +53,14 @@ export const SIGUNGU_MAP: Record<string, string[]> = {
   "제주특별자치도": ["제주시","서귀포시"],
 }
 
+export function deriveRegion(address: string): string {
+  const sido = SIDO_LIST.find(s => address.startsWith(s))
+  if (!sido) return ""
+  const rest = address.slice(sido.length).trim()
+  const sigungu = (SIGUNGU_MAP[sido] ?? []).find(sg => rest.startsWith(sg))
+  return sigungu ? `${sido} ${sigungu}` : sido
+}
+
 function parseRegion(value: string): { sido: string; sigungu: string } {
   if (!value) return { sido: "", sigungu: "" }
   for (const sido of SIDO_LIST) {
@@ -328,10 +336,26 @@ export function CorporationFormDialog({
       const res = await fetch("/api/ocr/business-license", { method: "POST", body: fd })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
-      if (data.bizNo) set("bizNo", data.bizNo)
-      if (data.ceo) set("ceo", data.ceo)
-      const parts = [data.bizNo ? "사업자번호 ✓" : "", data.ceo ? "대표자명 ✓" : ""].filter(Boolean)
-      setOcrMsg(parts.length ? parts.join(" / ") + " 자동입력 완료" : "추출된 정보가 없습니다.")
+
+      const LABEL: Record<string, string> = {
+        name: "법인명", bizNo: "사업자번호", corpNo: "법인번호",
+        ceo: "대표자명", openDate: "개업일", bizAddress: "사업장소재지", region: "지역",
+      }
+      const updates: Partial<Corporation> = {}
+      if (data.name)       updates.name       = data.name
+      if (data.bizNo)      updates.bizNo      = data.bizNo
+      if (data.corpNo)     updates.corpNo     = data.corpNo
+      if (data.ceo)        updates.ceo        = data.ceo
+      if (data.openDate)   updates.openDate   = data.openDate
+      if (data.bizAddress) updates.bizAddress = data.bizAddress
+      if (data.bizAddress) {
+        const region = deriveRegion(data.bizAddress)
+        if (region) updates.region = region
+      }
+
+      setForm(prev => ({ ...prev, ...updates }))
+      const filled = Object.keys(updates).map(k => LABEL[k]).filter(Boolean)
+      setOcrMsg(filled.length ? filled.join(" · ") + " 자동입력 완료" : "추출된 정보가 없습니다.")
     } catch {
       setOcrMsg("OCR 처리에 실패했습니다.")
     } finally {

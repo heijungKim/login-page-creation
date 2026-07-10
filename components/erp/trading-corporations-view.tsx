@@ -130,11 +130,16 @@ export function TradingCorporationsView() {
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       const next = { ...form }
-      if (data.bizNo) next.bizNo = data.bizNo
-      if (data.ceo) next.ceo = data.ceo
+      const LABEL: Record<string, string> = {
+        name: "법인명", bizNo: "사업자번호", ceo: "대표자명", address: "주소",
+      }
+      const filled: string[] = []
+      if (data.name)       { next.name    = data.name;       filled.push("name") }
+      if (data.bizNo)      { next.bizNo   = data.bizNo;      filled.push("bizNo") }
+      if (data.ceo)        { next.ceo     = data.ceo;        filled.push("ceo") }
+      if (data.bizAddress) { next.address = data.bizAddress; filled.push("address") }
       setter(next)
-      const parts = [data.bizNo ? "사업자번호 ✓" : "", data.ceo ? "대표자명 ✓" : ""].filter(Boolean)
-      setOcrMsg(parts.length ? parts.join(" / ") + " 자동입력 완료" : "추출된 정보가 없습니다.")
+      setOcrMsg(filled.length ? filled.map(k => LABEL[k]).join(" · ") + " 자동입력 완료" : "추출된 정보가 없습니다.")
     } catch {
       setOcrMsg("OCR 처리에 실패했습니다.")
     } finally {
