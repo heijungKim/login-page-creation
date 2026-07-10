@@ -390,21 +390,22 @@ export function TradingCorporationsView() {
       "의뢰업체\nE-Mail주소", "의뢰업체\n코드/구분",
     ]
 
-    // 2행 데이터
+    // 2행 데이터 (- 와 공백 제거 헬퍼)
+    const s = (v: string | undefined | null) => (v ?? "").replace(/[-\s]/g, "")
     const dataRow: string[] = headerTexts.map(() => "")
     dataRow[0]  = "RD"                                   // 레코드 구분
     dataRow[1]  = String(currentYear)                    // 결제 연도
     dataRow[2]  = excelQuarter                           // 분기 구분
-    dataRow[3]  = corp.bizNo                             // 제출자 사업자번호
+    dataRow[3]  = s(corp.bizNo)                          // 제출자 사업자번호
     dataRow[4]  = "1"                                    // 일련 번호
-    dataRow[5]  = subCorp?.bizNo ?? ""                   // 의뢰업체 사업자번호
-    dataRow[6]  = subCorp?.residentNo ?? ""              // 의뢰업체 대표자주민번호
+    dataRow[5]  = s(subCorp?.bizNo)                      // 의뢰업체 사업자번호
+    dataRow[6]  = s(subCorp?.residentNo)                 // 의뢰업체 대표자주민번호
     // dataRow[7]  의뢰업체 관리번호 — 미입력
-    dataRow[17] = subCorp?.hometaxId ?? ""               // 의뢰업체 아이디
-    dataRow[18] = subCorp?.irosUserNo ?? ""              // 의뢰업체 아이디수
-    dataRow[19] = subCorp?.phone ?? ""                   // 의뢰업체 전화번호
-    dataRow[20] = subCorp?.phone ?? ""                   // 의뢰업체 휴대폰번호
-    dataRow[21] = subCorp?.bizEmail ?? ""                // 의뢰업체 E-Mail주소
+    dataRow[17] = s(subCorp?.hometaxId)                  // 의뢰업체 아이디
+    dataRow[18] = s(subCorp?.irosUserNo)                 // 의뢰업체 아이디수
+    dataRow[19] = s(subCorp?.phone)                      // 의뢰업체 전화번호
+    dataRow[20] = s(subCorp?.phone)                      // 의뢰업체 휴대폰번호
+    dataRow[21] = s(subCorp?.bizEmail)                   // 의뢰업체 E-Mail주소
     dataRow[22] = "C"                                    // 의뢰업체 코드/구분
 
     const headerStyle = {
