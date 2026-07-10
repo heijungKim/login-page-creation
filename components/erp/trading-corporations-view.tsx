@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { cn } from "@/lib/utils"
 import { ApiError, api } from "@/lib/api"
 import { useCorporations } from "@/components/erp/corporations-context"
-import { OcrPreviewDialog, type OcrData } from "@/components/erp/corporation-form-dialog"
+import { OcrPreviewDialog, type OcrData, SIDO_LIST, SIGUNGU_MAP, deriveRegion } from "@/components/erp/corporation-form-dialog"
 
 type LinkedCorp = { id: number; name: string }
 type PgEntry = { id: number; pgCompanyName: string }
@@ -40,6 +40,67 @@ type TradingCorp = {
 }
 
 const TRADING_TYPE_OPTIONS = ["매입", "매출", "매입/매출", "기타"]
+
+const REGION_NORMALIZE: Record<string, string> = {
+  "서울특별시": "서울", "부산광역시": "부산", "대구광역시": "대구",
+  "인천광역시": "인천", "광주광역시": "광주", "대전광역시": "대전",
+  "울산광역시": "울산", "세종특별자치시": "세종",
+  "경기도": "경기", "강원도": "강원", "강원특별자치도": "강원",
+  "충청북도": "충북", "충청남도": "충남",
+  "전라북도": "전북", "전라남도": "전남", "전북특별자치도": "전북",
+  "경상북도": "경북", "경상남도": "경남",
+  "제주특별자치도": "제주",
+}
+
+// 시군구 → 시도 역방향 맵 (중복 이름 제외)
+const SIGUNGU_TO_SIDO: Record<string, string> = (() => {
+  const map: Record<string, Set<string>> = {}
+  for (const [sido, list] of Object.entries(SIGUNGU_MAP)) {
+    for (const sg of list) {
+      if (!map[sg]) map[sg] = new Set()
+      map[sg].add(sido)
+    }
+  }
+  const result: Record<string, string> = {}
+  for (const [sg, sidos] of Object.entries(map)) {
+    if (sidos.size === 1) result[sg] = [...sidos][0]
+  }
+  return result
+})()
+
+// 축약키 → 전체 시도명 (표시용)
+const SIDO_KEY_TO_FULL: Record<string, string> = (() => {
+  const m: Record<string, string> = {}
+  for (const [full, abbr] of Object.entries(REGION_NORMALIZE)) {
+    if (!m[abbr]) m[abbr] = full
+  }
+  return m
+})()
+
+function getSidoKey(address: string): string {
+  if (!address.trim()) return ""
+  const derived = deriveRegion(address)
+  if (derived) {
+    const sido = SIDO_LIST.find(s => derived.startsWith(s)) ?? ""
+    return REGION_NORMALIZE[sido] ?? sido
+  }
+  const firstWord = address.trim().split(/\s+/)[0] ?? ""
+  if (REGION_NORMALIZE[firstWord]) return REGION_NORMALIZE[firstWord]
+  if (SIGUNGU_TO_SIDO[firstWord]) {
+    const sido = SIGUNGU_TO_SIDO[firstWord]
+    return REGION_NORMALIZE[sido] ?? sido
+  }
+  return firstWord
+}
+
+// 표시용 전체 지역명 반환 (예: "충청남도 천안시")
+function getSidoLabel(address: string): string {
+  if (!address.trim()) return ""
+  const derived = deriveRegion(address)
+  if (derived) return derived
+  const key = getSidoKey(address)
+  return SIDO_KEY_TO_FULL[key] ?? key
+}
 
 const columns = [
   { key: "name",         label: "법인명",      minWidth: "150px" },
@@ -472,39 +533,35 @@ export function TradingCorporationsView() {
     saveLinks(linkedSubs, next)
   }
 
-  const REGION_NORMALIZE: Record<string, string> = {
-    "서울특별시": "서울", "부산광역시": "부산", "대구광역시": "대구",
-    "인천광역시": "인천", "광주광역시": "광주", "대전광역시": "대전",
-    "울산광역시": "울산", "세종특별자치시": "세종",
-    "경기도": "경기", "강원도": "강원", "강원특별자치도": "강원",
-    "충청북도": "충북", "충청남도": "충남",
-    "전라북도": "전북", "전라남도": "전남", "전북특별자치도": "전북",
-    "경상북도": "경북", "경상남도": "경남",
-    "제주특별자치도": "제주",
+  function getLinkedRegionKey(linked: LinkedCorp[]): string {
+    for (const c of linked) {
+      const fc = allCorps.find((ac) => ac.id === c.id)
+      if (!fc) continue
+      const k = getSidoKey(fc.region || fc.bizAddress || "")
+      if (k) return k
+    }
+    return ""
   }
 
-  function extractCityKey(s: string): string {
-    const first = s.trim().split(/\s+/)[0] ?? ""
-    return REGION_NORMALIZE[first] ?? first
-  }
-
-  function isSameRegion(tradingAddress: string, corpRegion: string, corpBizAddress: string): boolean {
-    const addrKey = extractCityKey(tradingAddress)
-    if (!addrKey) return false
-    const regionSrc = corpRegion.trim() || corpBizAddress.trim()
-    if (!regionSrc) return false
-    const regionKey = extractCityKey(regionSrc)
-    if (!regionKey) return false
-    return addrKey === regionKey || addrKey.includes(regionKey) || regionKey.includes(addrKey)
+  // 하위 법인과 상품권 법인 간 지역 중복만 체크
+  // 겹치면 표시용 지역 레이블 반환, 없으면 ""
+  function checkSameRegion(corp: { region: string; bizAddress: string }, targetList: LinkedCorp[]): string {
+    const corpSrc = corp.region || corp.bizAddress || ""
+    const corpKey = getSidoKey(corpSrc)
+    if (!corpKey) return ""
+    const counterKey = getLinkedRegionKey(targetList)
+    if (!counterKey || counterKey !== corpKey) return ""
+    return getSidoLabel(corpSrc) || corpKey
   }
 
   function tryAddLinkedSub(selectedId: string) {
     const corp = subsidiaryOptions.find((c) => String(c.id) === selectedId)
     if (!corp || !corp.id) return
     const link: LinkedCorp = { id: corp.id, name: corp.name }
-    if (isSameRegion(detail?.address ?? "", corp.region ?? "", corp.bizAddress ?? "")) {
-      const regionKey = extractCityKey(corp.region.trim() || corp.bizAddress || detail?.address || "")
-      setPendingLink({ type: "sub", corp: link, region: regionKey })
+    // 상품권 법인과 지역 비교
+    const regionLabel = checkSameRegion(corp, linkedGifts)
+    if (regionLabel) {
+      setPendingLink({ type: "sub", corp: link, region: regionLabel })
       return
     }
     addLinkedSub(link)
@@ -514,9 +571,10 @@ export function TradingCorporationsView() {
     const corp = giftCorpOptions.find((c) => String(c.id) === selectedId)
     if (!corp || !corp.id) return
     const link: LinkedCorp = { id: corp.id, name: corp.name }
-    if (isSameRegion(detail?.address ?? "", corp.region ?? "", corp.bizAddress ?? "")) {
-      const regionKey = extractCityKey(corp.region.trim() || corp.bizAddress || detail?.address || "")
-      setPendingLink({ type: "gift", corp: link, region: regionKey })
+    // 하위 법인과 지역 비교
+    const regionLabel = checkSameRegion(corp, linkedSubs)
+    if (regionLabel) {
+      setPendingLink({ type: "gift", corp: link, region: regionLabel })
       return
     }
     addLinkedGift(link)
@@ -888,7 +946,7 @@ export function TradingCorporationsView() {
                         <div className="flex flex-col gap-2">
                           {linkedSubs.map((c) => {
                             const fullCorp = allCorps.find((ac) => ac.id === c.id)
-                            const address = fullCorp?.bizAddress || fullCorp?.region || ""
+                            const address = fullCorp?.region || fullCorp?.bizAddress || ""
                             return (
                               <div key={c.id} className="flex flex-col gap-1">
                                 <span className="inline-flex items-center gap-1.5 self-start rounded-full bg-sky-100 px-3 py-1.5 text-sm font-medium text-sky-700">
@@ -921,7 +979,7 @@ export function TradingCorporationsView() {
                         <div className="flex flex-col gap-2">
                           {linkedGifts.map((c) => {
                             const fullCorp = allCorps.find((ac) => ac.id === c.id)
-                            const address = fullCorp?.bizAddress || fullCorp?.region || ""
+                            const address = fullCorp?.region || fullCorp?.bizAddress || ""
                             return (
                               <div key={c.id} className="flex flex-col gap-1">
                                 <span className="inline-flex items-center gap-1.5 self-start rounded-full bg-orange-100 px-3 py-1.5 text-sm font-medium text-orange-700">
@@ -984,7 +1042,7 @@ export function TradingCorporationsView() {
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>주소지 확인</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground py-2">
-            <span className="font-semibold text-foreground">{pendingLink?.corp.name}</span>의 주소지가 현재 거래 법인과 같은 지역(<span className="font-semibold text-foreground">{pendingLink?.region}</span>)입니다.<br />
+            <span className="font-semibold text-foreground">{pendingLink?.corp.name}</span>의 주소지가 같은 지역(<span className="font-semibold text-foreground">{pendingLink?.region}</span>)에 이미 연결된 법인이 있습니다.<br />
             그래도 등록하겠습니까?
           </p>
           <DialogFooter>
