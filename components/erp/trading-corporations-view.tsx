@@ -349,21 +349,6 @@ export function TradingCorporationsView() {
 
   const [showClosedSubs, setShowClosedSubs] = useState(false)
   const [showClosedGifts, setShowClosedGifts] = useState(false)
-  const [linkSubSearch, setLinkSubSearch] = useState("")
-  const [linkGiftSearch, setLinkGiftSearch] = useState("")
-
-  const filteredSubOptions = useMemo(
-    () => subsidiaryOptions
-      .filter((c) => showClosedSubs || c.status !== "폐업")
-      .filter((c) => !linkSubSearch || c.name.toLowerCase().includes(linkSubSearch.toLowerCase())),
-    [subsidiaryOptions, showClosedSubs, linkSubSearch]
-  )
-  const filteredGiftOptions = useMemo(
-    () => giftCorpOptions
-      .filter((c) => showClosedGifts || c.status !== "폐업")
-      .filter((c) => !linkGiftSearch || c.name.toLowerCase().includes(linkGiftSearch.toLowerCase())),
-    [giftCorpOptions, showClosedGifts, linkGiftSearch]
-  )
 
   const [addOpen, setAddOpen] = useState(false)
   const [addForm, setAddForm] = useState<FormData>(emptyForm())
@@ -519,8 +504,6 @@ export function TradingCorporationsView() {
     setLinkedSubs(row.subsidiaries ?? [])
     setLinkedGifts(row.giftCorps ?? [])
     setSubmitError(null)
-    setLinkSubSearch("")
-    setLinkGiftSearch("")
     setShowClosedSubs(false)
     setShowClosedGifts(false)
   }
@@ -621,10 +604,9 @@ export function TradingCorporationsView() {
   }
 
   function tryAddLinkedSub(selectedId: string) {
-    const corp = filteredSubOptions.find((c) => String(c.id) === selectedId)
+    const corp = subsidiaryOptions.find((c) => String(c.id) === selectedId)
     if (!corp || !corp.id) return
     const link: LinkedCorp = { id: corp.id, name: corp.name }
-    // 상품권 법인과 지역 비교
     const regionLabel = checkSameRegion(corp, linkedGifts)
     if (regionLabel) {
       setPendingLink({ type: "sub", corp: link, region: regionLabel })
@@ -634,10 +616,9 @@ export function TradingCorporationsView() {
   }
 
   function tryAddLinkedGift(selectedId: string) {
-    const corp = filteredGiftOptions.find((c) => String(c.id) === selectedId)
+    const corp = giftCorpOptions.find((c) => String(c.id) === selectedId)
     if (!corp || !corp.id) return
     const link: LinkedCorp = { id: corp.id, name: corp.name }
-    // 하위 법인과 지역 비교
     const regionLabel = checkSameRegion(corp, linkedSubs)
     if (regionLabel) {
       setPendingLink({ type: "gift", corp: link, region: regionLabel })
@@ -1032,35 +1013,14 @@ export function TradingCorporationsView() {
                       <span className="text-xs text-muted-foreground">하위 법인</span>
                       {linkedSubs.length === 0 ? (
                         <div className="flex flex-col gap-1.5">
-                          <div className="flex items-center gap-2">
-                            <Input
-                              value={linkSubSearch}
-                              onChange={(e) => setLinkSubSearch(e.target.value)}
-                              placeholder="법인명 검색..."
-                              className="h-8 text-xs"
-                            />
-                            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
-                              <input
-                                type="checkbox"
-                                checked={showClosedSubs}
-                                onChange={(e) => setShowClosedSubs(e.target.checked)}
-                                className="h-3.5 w-3.5"
-                              />
-                              폐업 보기
-                            </label>
-                          </div>
-                          <select
-                            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
-                            defaultValue=""
-                            onChange={(e) => tryAddLinkedSub(e.target.value)}
-                          >
-                            <option value="" disabled>하위 법인 선택</option>
-                            {filteredSubOptions.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}{c.status === "폐업" ? " (폐업)" : ""}
-                              </option>
-                            ))}
-                          </select>
+                          <CorpCombobox
+                            key={`sub-${detail.id}`}
+                            options={subsidiaryOptions}
+                            onSelect={tryAddLinkedSub}
+                            placeholder="법인명 검색 후 선택..."
+                            showClosed={showClosedSubs}
+                            onShowClosedChange={setShowClosedSubs}
+                          />
                         </div>
                       ) : (
                         <div className="flex flex-col gap-2">
@@ -1088,35 +1048,14 @@ export function TradingCorporationsView() {
                       <span className="text-xs text-muted-foreground">상품권 법인</span>
                       {linkedGifts.length === 0 ? (
                         <div className="flex flex-col gap-1.5">
-                          <div className="flex items-center gap-2">
-                            <Input
-                              value={linkGiftSearch}
-                              onChange={(e) => setLinkGiftSearch(e.target.value)}
-                              placeholder="법인명 검색..."
-                              className="h-8 text-xs"
-                            />
-                            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
-                              <input
-                                type="checkbox"
-                                checked={showClosedGifts}
-                                onChange={(e) => setShowClosedGifts(e.target.checked)}
-                                className="h-3.5 w-3.5"
-                              />
-                              폐업 보기
-                            </label>
-                          </div>
-                          <select
-                            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
-                            defaultValue=""
-                            onChange={(e) => tryAddLinkedGift(e.target.value)}
-                          >
-                            <option value="" disabled>상품권 법인 선택</option>
-                            {filteredGiftOptions.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}{c.status === "폐업" ? " (폐업)" : ""}
-                              </option>
-                            ))}
-                          </select>
+                          <CorpCombobox
+                            key={`gift-${detail.id}`}
+                            options={giftCorpOptions}
+                            onSelect={tryAddLinkedGift}
+                            placeholder="법인명 검색 후 선택..."
+                            showClosed={showClosedGifts}
+                            onShowClosedChange={setShowClosedGifts}
+                          />
                         </div>
                       ) : (
                         <div className="flex flex-col gap-2">
@@ -1318,6 +1257,90 @@ export function TradingCorporationsView() {
       </Dialog>
     </div>
     </>
+  )
+}
+
+function CorpCombobox({
+  options,
+  onSelect,
+  placeholder,
+  showClosed,
+  onShowClosedChange,
+}: {
+  options: Array<{ id: number; name: string; status?: string }>
+  onSelect: (id: string) => void
+  placeholder: string
+  showClosed: boolean
+  onShowClosedChange: (v: boolean) => void
+}) {
+  const [search, setSearch] = useState("")
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const filtered = useMemo(
+    () => options
+      .filter((c) => showClosed || c.status !== "폐업")
+      .filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase())),
+    [options, showClosed, search]
+  )
+
+  useEffect(() => {
+    function onOutsideClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", onOutsideClick)
+    return () => document.removeEventListener("mousedown", onOutsideClick)
+  }, [])
+
+  return (
+    <div ref={containerRef} className="relative">
+      <Input
+        value={search}
+        onChange={(e) => { setSearch(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        placeholder={placeholder}
+        className="h-8 text-xs"
+      />
+      {open && (
+        <div className="absolute z-50 left-0 right-0 mt-1 rounded-md border border-input bg-background shadow-md">
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-border">
+            <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showClosed}
+                onChange={(e) => onShowClosedChange(e.target.checked)}
+                className="h-3 w-3"
+              />
+              폐업 보기
+            </label>
+          </div>
+          <div className="max-h-44 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-muted-foreground">검색 결과 없음</div>
+            ) : (
+              filtered.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent text-foreground"
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    onSelect(String(c.id))
+                    setSearch("")
+                    setOpen(false)
+                  }}
+                >
+                  {c.name}
+                  {c.status === "폐업" && <span className="ml-1 text-xs text-muted-foreground">(폐업)</span>}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
