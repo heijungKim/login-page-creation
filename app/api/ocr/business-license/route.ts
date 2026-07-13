@@ -19,19 +19,30 @@ export async function POST(request: NextRequest) {
     ocrForm.append("scale", "true")
 
     const apiKey = process.env.OCR_SPACE_KEY || "helloworld"
-    const res = await fetch("https://api.ocr.space/parse/image", {
-      method: "POST",
-      headers: { apikey: apiKey },
-      body: ocrForm,
-    })
+    console.log("[OCR] key prefix:", apiKey.slice(0, 6), "| base64 length:", base64.length)
+
+    let res: Response
+    try {
+      res = await fetch("https://api.ocr.space/parse/image", {
+        method: "POST",
+        headers: { apikey: apiKey },
+        body: ocrForm,
+      })
+    } catch (fetchErr) {
+      console.error("[OCR] fetch 네트워크 오류:", fetchErr)
+      return NextResponse.json({ error: "OCR 네트워크 오류: " + String(fetchErr) }, { status: 500 })
+    }
 
     if (!res.ok) {
-      return NextResponse.json({ error: "OCR 서버 오류" }, { status: 500 })
+      const body = await res.text().catch(() => "")
+      console.error("[OCR] 서버 오류 status:", res.status, body)
+      return NextResponse.json({ error: `OCR 서버 오류 (${res.status}): ${body}` }, { status: 500 })
     }
 
     const json = await res.json()
     if (json.IsErroredOnProcessing) {
       const msg = Array.isArray(json.ErrorMessage) ? json.ErrorMessage[0] : "OCR 처리 실패"
+      console.error("[OCR] IsErroredOnProcessing:", json.ErrorMessage)
       return NextResponse.json({ error: msg }, { status: 500 })
     }
 
@@ -39,7 +50,7 @@ export async function POST(request: NextRequest) {
     const result = parseBusinessLicense(rawText)
     return NextResponse.json(result)
   } catch (e) {
-    console.error("OCR error:", e)
+    console.error("[OCR] 예외:", e)
     return NextResponse.json({ error: "OCR 처리에 실패했습니다." }, { status: 500 })
   }
 }
