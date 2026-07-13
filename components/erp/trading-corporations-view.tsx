@@ -328,19 +328,6 @@ export function TradingCorporationsView() {
     [allCorps]
   )
 
-  const filteredSubOptions = useMemo(
-    () => subsidiaryOptions
-      .filter((c) => showClosedSubs || c.status !== "폐업")
-      .filter((c) => !linkSubSearch || c.name.toLowerCase().includes(linkSubSearch.toLowerCase())),
-    [subsidiaryOptions, showClosedSubs, linkSubSearch]
-  )
-  const filteredGiftOptions = useMemo(
-    () => giftCorpOptions
-      .filter((c) => showClosedGifts || c.status !== "폐업")
-      .filter((c) => !linkGiftSearch || c.name.toLowerCase().includes(linkGiftSearch.toLowerCase())),
-    [giftCorpOptions, showClosedGifts, linkGiftSearch]
-  )
-
   const [rows, setRows] = useState<TradingCorp[]>([])
   const [pgCompanies, setPgCompanies] = useState<PgCompany[]>([])
   const [loading, setLoading] = useState(true)
@@ -364,6 +351,19 @@ export function TradingCorporationsView() {
   const [showClosedGifts, setShowClosedGifts] = useState(false)
   const [linkSubSearch, setLinkSubSearch] = useState("")
   const [linkGiftSearch, setLinkGiftSearch] = useState("")
+
+  const filteredSubOptions = useMemo(
+    () => subsidiaryOptions
+      .filter((c) => showClosedSubs || c.status !== "폐업")
+      .filter((c) => !linkSubSearch || c.name.toLowerCase().includes(linkSubSearch.toLowerCase())),
+    [subsidiaryOptions, showClosedSubs, linkSubSearch]
+  )
+  const filteredGiftOptions = useMemo(
+    () => giftCorpOptions
+      .filter((c) => showClosedGifts || c.status !== "폐업")
+      .filter((c) => !linkGiftSearch || c.name.toLowerCase().includes(linkGiftSearch.toLowerCase())),
+    [giftCorpOptions, showClosedGifts, linkGiftSearch]
+  )
 
   const [addOpen, setAddOpen] = useState(false)
   const [addForm, setAddForm] = useState<FormData>(emptyForm())
