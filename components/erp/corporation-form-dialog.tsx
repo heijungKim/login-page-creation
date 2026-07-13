@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { Loader2, Plus, Upload, X } from "lucide-react"
+import { Loader2, Paperclip, Plus, Upload, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -259,6 +259,7 @@ export type Corporation = {
   registeredAt?: string
   createdAt?: string
   updatedAt?: string
+  bizLicenseFileUrl?: string
 }
 
 const emptyForm: Corporation = {
@@ -299,6 +300,7 @@ const emptyForm: Corporation = {
   closeDate: "",
   progressMemo: "",
   note: "",
+  bizLicenseFileUrl: "",
 }
 
 export function formatResidentNo(raw: string): string {
@@ -442,6 +444,7 @@ export function CorporationFormDialog({
   const [ocrLoading, setOcrLoading] = useState(false)
   const [ocrMsg, setOcrMsg] = useState("")
   const [ocrPreview, setOcrPreview] = useState<{ imageUrl: string; data: OcrData } | null>(null)
+  const [attachedFileName, setAttachedFileName] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function handleOcr(e: React.ChangeEvent<HTMLInputElement>) {
@@ -451,12 +454,26 @@ export function CorporationFormDialog({
     setOcrLoading(true)
     setOcrMsg("")
     try {
-      const fd = new FormData()
-      fd.append("image", file)
-      const res = await fetch("/api/ocr/business-license", { method: "POST", body: fd })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      setOcrPreview({ imageUrl, data })
+      const [ocrRes, uploadRes] = await Promise.all([
+        (async () => {
+          const fd = new FormData()
+          fd.append("image", file)
+          const res = await fetch("/api/ocr/business-license", { method: "POST", body: fd })
+          return res.json()
+        })(),
+        (async () => {
+          const fd = new FormData()
+          fd.append("file", file)
+          const res = await fetch("/upload", { method: "POST", body: fd })
+          return res.json()
+        })(),
+      ])
+      if (ocrRes.error) throw new Error(ocrRes.error)
+      if (uploadRes.url) {
+        setForm((prev) => ({ ...prev, bizLicenseFileUrl: uploadRes.url }))
+        setAttachedFileName(file.name)
+      }
+      setOcrPreview({ imageUrl, data: ocrRes })
     } catch {
       setOcrMsg("OCR 처리에 실패했습니다.")
       URL.revokeObjectURL(imageUrl)
@@ -552,16 +569,29 @@ export function CorporationFormDialog({
 
         <form onSubmit={handleSubmit} className="flex max-h-[calc(75dvh-9rem)] sm:max-h-[calc(90svh-9rem)] flex-col">
           <div className="flex flex-col gap-5 overflow-y-auto px-6 py-5">
-            {/* 사업자등록증 OCR */}
-            <div className="flex items-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3">
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleOcr} />
-              <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" disabled={ocrLoading} onClick={() => fileInputRef.current?.click()}>
-                {ocrLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                {ocrLoading ? "분석 중..." : "사업자등록증 업로드"}
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                {ocrMsg || "업로드하면 사업자번호·대표자명을 자동으로 입력합니다."}
-              </span>
+            {/* 사업자등록증 OCR + 파일 첨부 */}
+            <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <input ref={fileInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleOcr} />
+                <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" disabled={ocrLoading} onClick={() => fileInputRef.current?.click()}>
+                  {ocrLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {ocrLoading ? "업로드 중..." : "사업자등록증 업로드"}
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {ocrMsg || "업로드하면 자동입력 + 파일로 저장됩니다."}
+                </span>
+              </div>
+              {form.bizLicenseFileUrl && (
+                <div className="flex items-center gap-2 pl-1">
+                  <Paperclip className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <a href={form.bizLicenseFileUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline underline-offset-2 truncate max-w-[240px]">
+                    {attachedFileName || "첨부파일"}
+                  </a>
+                  <button type="button" className="text-muted-foreground hover:text-destructive" onClick={() => { setForm((p) => ({ ...p, bizLicenseFileUrl: "" })); setAttachedFileName("") }}>
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
             <Section title="기본 정보">
               <div className="flex flex-col gap-1.5">

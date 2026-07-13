@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Download, Loader2, Plus, Trash2, Upload, X } from "lucide-react"
+import { Download, Loader2, Paperclip, Plus, Trash2, Upload, X } from "lucide-react"
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const XLSX = require("xlsx-js-style")
 import { Button } from "@/components/ui/button"
@@ -37,6 +37,7 @@ type TradingCorp = {
   subsidiaries: LinkedCorp[]
   giftCorps: LinkedCorp[]
   pgs: PgEntry[]
+  bizLicenseFileUrl?: string | null
 }
 
 const TRADING_TYPE_OPTIONS = ["매입", "매출", "매입/매출", "기타"]
@@ -128,12 +129,14 @@ type FormData = {
   name: string; bizNo: string; corpNo: string; ceo: string; contact: string
   email: string; address: string; account: string; tradingType: string
   businessType: string; businessItem: string; note: string; openDate: string
+  bizLicenseFileUrl?: string
 }
 
 const emptyForm = (): FormData => ({
   name: "", bizNo: "", corpNo: "", ceo: "", contact: "",
   email: "", address: "", account: "", tradingType: "매입/매출",
   businessType: "", businessItem: "", note: "", openDate: "",
+  bizLicenseFileUrl: "",
 })
 
 function Field({ id, label, value, onChange, placeholder }: {
@@ -357,7 +360,11 @@ export function TradingCorporationsView() {
   const [ocrLoading, setOcrLoading] = useState(false)
   const [ocrMsg, setOcrMsg] = useState("")
   const [ocrPreview, setOcrPreview] = useState<{ imageUrl: string; data: OcrData; setter: (f: FormData) => void; form: FormData } | null>(null)
+  const [addAttachedFileName, setAddAttachedFileName] = useState("")
+  const [editAttachedFileName, setEditAttachedFileName] = useState("")
+  const [editFileUploading, setEditFileUploading] = useState(false)
   const addFileRef = useRef<HTMLInputElement>(null)
+  const editFileRef = useRef<HTMLInputElement>(null)
 
   async function handleOcr(e: React.ChangeEvent<HTMLInputElement>, setter: (f: FormData) => void, form: FormData) {
     const file = e.target.files?.[0]
@@ -366,17 +373,52 @@ export function TradingCorporationsView() {
     setOcrLoading(true)
     setOcrMsg("")
     try {
-      const fd = new FormData()
-      fd.append("image", file)
-      const res = await fetch("/api/ocr/business-license", { method: "POST", body: fd })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      setOcrPreview({ imageUrl, data, setter, form })
+      const [ocrRes, uploadRes] = await Promise.all([
+        (async () => {
+          const fd = new FormData()
+          fd.append("image", file)
+          const res = await fetch("/api/ocr/business-license", { method: "POST", body: fd })
+          return res.json()
+        })(),
+        (async () => {
+          const fd = new FormData()
+          fd.append("file", file)
+          const res = await fetch("/upload", { method: "POST", body: fd })
+          return res.json()
+        })(),
+      ])
+      if (ocrRes.error) throw new Error(ocrRes.error)
+      if (uploadRes.url) {
+        setter({ ...form, bizLicenseFileUrl: uploadRes.url })
+        setAddAttachedFileName(file.name)
+      }
+      setOcrPreview({ imageUrl, data: ocrRes, setter, form: { ...form, bizLicenseFileUrl: uploadRes.url ?? form.bizLicenseFileUrl } })
     } catch {
       setOcrMsg("OCR 처리에 실패했습니다.")
       URL.revokeObjectURL(imageUrl)
     } finally {
       setOcrLoading(false)
+      e.target.value = ""
+    }
+  }
+
+  async function handleEditFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setEditFileUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch("/upload", { method: "POST", body: fd })
+      const data = await res.json()
+      if (data.url) {
+        setEditForm((f) => ({ ...f, bizLicenseFileUrl: data.url }))
+        setEditAttachedFileName(file.name)
+      }
+    } catch {
+      // 업로드 실패 무시
+    } finally {
+      setEditFileUploading(false)
       e.target.value = ""
     }
   }
@@ -452,7 +494,9 @@ export function TradingCorporationsView() {
       email: row.email, address: row.address, account: row.account,
       tradingType: row.tradingType, businessType: row.businessType ?? "",
       businessItem: row.businessItem ?? "", note: row.note, openDate: row.openDate ?? "",
+      bizLicenseFileUrl: row.bizLicenseFileUrl ?? "",
     })
+    setEditAttachedFileName("")
     setDetailPgs(row.pgs ?? [])
     setLinkedSubs(row.subsidiaries ?? [])
     setLinkedGifts(row.giftCorps ?? [])
@@ -892,6 +936,28 @@ export function TradingCorporationsView() {
                     <div className="col-span-1 sm:col-span-2">
                       <Field id="e-note" label="비고" value={editForm.note} onChange={(v) => setEditForm((f) => ({ ...f, note: v }))} />
                     </div>
+                    {/* 사업자등록증 첨부 (편집 모드) */}
+                    <div className="col-span-1 sm:col-span-2 flex flex-col gap-1.5">
+                      <Label className="text-xs text-muted-foreground">사업자등록증 첨부</Label>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <input ref={editFileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleEditFileChange} />
+                        <Button type="button" variant="outline" size="sm" className="gap-1.5 h-8 text-xs" disabled={editFileUploading} onClick={() => editFileRef.current?.click()}>
+                          {editFileUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                          {editFileUploading ? "업로드 중..." : editForm.bizLicenseFileUrl ? "파일 교체" : "파일 첨부"}
+                        </Button>
+                        {editForm.bizLicenseFileUrl && (
+                          <>
+                            <a href={editForm.bizLicenseFileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-primary underline underline-offset-2 max-w-[180px] truncate">
+                              <Paperclip className="h-3.5 w-3.5 shrink-0" />
+                              {editAttachedFileName || "첨부파일 보기"}
+                            </a>
+                            <button type="button" className="text-muted-foreground hover:text-destructive" onClick={() => { setEditForm((f) => ({ ...f, bizLicenseFileUrl: "" })); setEditAttachedFileName("") }}>
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -911,6 +977,15 @@ export function TradingCorporationsView() {
                     <DF label="계좌번호" value={detail.account} className="col-span-1 sm:col-span-2" />
                     <DF label="비고" value={detail.note} className="col-span-1 sm:col-span-2" />
                     {detail.registeredAt && <p className="col-span-1 sm:col-span-2 text-xs text-muted-foreground">등록일: {detail.registeredAt}</p>}
+                    {detail.bizLicenseFileUrl && (
+                      <div className="col-span-1 sm:col-span-2">
+                        <p className="text-xs text-muted-foreground mb-1">사업자등록증 첨부</p>
+                        <a href={detail.bizLicenseFileUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-primary underline underline-offset-2">
+                          <Paperclip className="h-3.5 w-3.5" />
+                          첨부파일 보기
+                        </a>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1060,14 +1135,27 @@ export function TradingCorporationsView() {
           </DialogHeader>
           <div className="flex max-h-[calc(75dvh-10rem)] sm:max-h-[calc(85dvh-10rem)] flex-col gap-4 overflow-y-auto px-6 py-5">
             {submitError && <p className="text-xs text-destructive">{submitError}</p>}
-            {/* 사업자등록증 OCR */}
-            <div className="flex items-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3">
-              <input ref={addFileRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleOcr(e, setAddForm, addForm)} />
-              <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" disabled={ocrLoading} onClick={() => { setOcrMsg(""); addFileRef.current?.click() }}>
-                {ocrLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                {ocrLoading ? "분석 중..." : "사업자등록증 업로드"}
-              </Button>
-              <span className="text-xs text-muted-foreground">{ocrMsg || "업로드하면 사업자번호·대표자명을 자동으로 입력합니다."}</span>
+            {/* 사업자등록증 OCR + 파일 첨부 */}
+            <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <input ref={addFileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => handleOcr(e, setAddForm, addForm)} />
+                <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" disabled={ocrLoading} onClick={() => { setOcrMsg(""); addFileRef.current?.click() }}>
+                  {ocrLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {ocrLoading ? "업로드 중..." : "사업자등록증 업로드"}
+                </Button>
+                <span className="text-xs text-muted-foreground">{ocrMsg || "업로드하면 자동입력 + 파일로 저장됩니다."}</span>
+              </div>
+              {addForm.bizLicenseFileUrl && (
+                <div className="flex items-center gap-2 pl-1">
+                  <Paperclip className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <a href={addForm.bizLicenseFileUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline underline-offset-2 truncate max-w-[220px]">
+                    {addAttachedFileName || "첨부파일"}
+                  </a>
+                  <button type="button" className="text-muted-foreground hover:text-destructive" onClick={() => { setAddForm((f) => ({ ...f, bizLicenseFileUrl: "" })); setAddAttachedFileName("") }}>
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field id="a-name" label="법인명 *" value={addForm.name} onChange={(v) => setAddForm((f) => ({ ...f, name: v }))} />

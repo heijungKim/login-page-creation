@@ -1,7 +1,7 @@
 ﻿"use client"
 
-import React, { useMemo, useState } from "react"
-import { MessageSquareText, Plus, Trash2 } from "lucide-react"
+import React, { useMemo, useRef, useState } from "react"
+import { Loader2, MessageSquareText, Paperclip, Plus, Trash2, Upload, X } from "lucide-react"
 import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { api, ApiError } from "@/lib/api"
 import { Button } from "@/components/ui/button"
@@ -151,6 +151,8 @@ export function CorporationsView() {
   const [memoTooltip, setMemoTooltip] = useState<{ text: string; x: number; y: number } | null>(null)
   const [bulkMode, setBulkMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [fileUploading, setFileUploading] = useState(false)
+  const editFileRef = useRef<HTMLInputElement>(null)
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
@@ -220,6 +222,24 @@ export function CorporationsView() {
 
   function setEdit<K extends keyof Corporation>(key: K, value: Corporation[K]) {
     setEditForm((prev) => prev ? { ...prev, [key]: value } : prev)
+  }
+
+  async function handleEditFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setFileUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch("/upload", { method: "POST", body: fd })
+      const data = await res.json()
+      if (data.url) setEdit("bizLicenseFileUrl", data.url)
+    } catch {
+      // 업로드 실패 시 무시
+    } finally {
+      setFileUploading(false)
+      e.target.value = ""
+    }
   }
 
   function setFilter(key: string, value: string) {
@@ -642,6 +662,28 @@ export function CorporationsView() {
                         <EF label="개시일" type="date" value={editForm.startDate} onChange={(v) => setEdit("startDate", v)} />
                         <EF label="사업자 번호" value={editForm.bizNo} onChange={(v) => setEdit("bizNo", v)} />
                         <EF label="법인 번호" value={editForm.corpNo} onChange={(v) => setEdit("corpNo", v)} />
+                        {/* 사업자등록증 첨부 */}
+                        <div className="col-span-full flex flex-col gap-1.5">
+                          <Label className="text-xs text-muted-foreground">사업자등록증 첨부</Label>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <input ref={editFileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleEditFileUpload} />
+                            <Button type="button" variant="outline" size="sm" className="gap-1.5 h-8 text-xs" disabled={fileUploading} onClick={() => editFileRef.current?.click()}>
+                              {fileUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                              {fileUploading ? "업로드 중..." : editForm.bizLicenseFileUrl ? "파일 교체" : "파일 첨부"}
+                            </Button>
+                            {editForm.bizLicenseFileUrl && (
+                              <>
+                                <a href={editForm.bizLicenseFileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-primary underline underline-offset-2 max-w-[200px] truncate">
+                                  <Paperclip className="h-3.5 w-3.5 shrink-0" />
+                                  첨부파일 보기
+                                </a>
+                                <button type="button" className="text-muted-foreground hover:text-destructive" onClick={() => setEdit("bizLicenseFileUrl", "")}>
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
@@ -672,6 +714,15 @@ export function CorporationsView() {
                         <DetailField label="개시일" value={detail.startDate} />
                         <DetailField label="사업자 번호" value={detail.bizNo} />
                         <DetailField label="법인 번호" value={detail.corpNo} />
+                        {detail.bizLicenseFileUrl && (
+                          <div className="col-span-full">
+                            <p className="text-xs text-muted-foreground mb-1">사업자등록증 첨부</p>
+                            <a href={detail.bizLicenseFileUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-primary underline underline-offset-2">
+                              <Paperclip className="h-3.5 w-3.5" />
+                              첨부파일 보기
+                            </a>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
