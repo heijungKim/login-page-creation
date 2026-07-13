@@ -47,7 +47,9 @@ export async function POST(request: NextRequest) {
     }
 
     const rawText: string = json.ParsedResults?.[0]?.ParsedText ?? ""
+    console.log("[OCR] raw text:\n", rawText)
     const result = parseBusinessLicense(rawText)
+    console.log("[OCR] parsed result:", JSON.stringify(result))
     return NextResponse.json(result)
   } catch (e) {
     console.error("[OCR] 예외:", e)
@@ -78,13 +80,18 @@ function parseBusinessLicense(text: string) {
   const corpNo = (corpNoMatches[0]?.[1] ?? "").replace(/[–]/g, "-")
 
   // 상호 / 법인명 — "(단체명)", "(개인)", "(법인)" 등 괄호 설명 포함 패턴 처리
+  // \s를 캐릭터 클래스에서 제거해 줄바꿈을 넘어가지 않도록 함
   const name = first(t, [
     /법\s*인\s*명\s*(?:\([^)]*\))?\s*[：:]\s*([^\n]{2,40})/,
     /단\s*체\s*명\s*(?:\([^)]*\))?\s*[：:]\s*([^\n]{2,40})/,
     /상\s*호\s*(?:\([^)]*\))?\s*[：:]\s*([^\n]{2,40})/,
-    /상\s*호\s+([가-힣a-zA-Z0-9()（）&\s]{2,40})/,
-    /법\s*인\s*명\s+([가-힣a-zA-Z0-9()（）&\s]{2,40})/,
-    /등\s*록\s*번\s*호[^\n]*\n\s*([가-힣a-zA-Z0-9()（）&\s]{2,40})/,
+    // 콜론 없이 '상호' 바로 뒤에 값 (줄바꿈 불가)
+    /상\s*호\s+([가-힣a-zA-Z0-9()（）&][^\n]{1,39})/,
+    // '상'이 분리된 경우: '호 ：신익' 패턴
+    /(?:^|\n)[^\n]*호\s*[：:]\s*([가-힣a-zA-Z0-9()（）&][^\n]{1,39})/m,
+    /법\s*인\s*명\s+([가-힣a-zA-Z0-9()（）&][^\n]{1,39})/,
+    // 등록번호 다음 줄 — \s 제거하여 줄바꿈 넘김 방지
+    /등\s*록\s*번\s*호[^\n]*\n[^\n]*?([가-힣]{2,20}[가-힣a-zA-Z0-9()（）&\s]{0,19})/,
   ])
 
   // 대표자

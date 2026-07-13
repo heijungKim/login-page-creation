@@ -328,6 +328,19 @@ export function TradingCorporationsView() {
     [allCorps]
   )
 
+  const filteredSubOptions = useMemo(
+    () => subsidiaryOptions
+      .filter((c) => showClosedSubs || c.status !== "폐업")
+      .filter((c) => !linkSubSearch || c.name.toLowerCase().includes(linkSubSearch.toLowerCase())),
+    [subsidiaryOptions, showClosedSubs, linkSubSearch]
+  )
+  const filteredGiftOptions = useMemo(
+    () => giftCorpOptions
+      .filter((c) => showClosedGifts || c.status !== "폐업")
+      .filter((c) => !linkGiftSearch || c.name.toLowerCase().includes(linkGiftSearch.toLowerCase())),
+    [giftCorpOptions, showClosedGifts, linkGiftSearch]
+  )
+
   const [rows, setRows] = useState<TradingCorp[]>([])
   const [pgCompanies, setPgCompanies] = useState<PgCompany[]>([])
   const [loading, setLoading] = useState(true)
@@ -346,6 +359,11 @@ export function TradingCorporationsView() {
   const [linkedGifts, setLinkedGifts] = useState<LinkedCorp[]>([])
   const [linkSaving, setLinkSaving] = useState(false)
   const [pendingLink, setPendingLink] = useState<{ type: "sub" | "gift"; corp: LinkedCorp; region: string } | null>(null)
+
+  const [showClosedSubs, setShowClosedSubs] = useState(false)
+  const [showClosedGifts, setShowClosedGifts] = useState(false)
+  const [linkSubSearch, setLinkSubSearch] = useState("")
+  const [linkGiftSearch, setLinkGiftSearch] = useState("")
 
   const [addOpen, setAddOpen] = useState(false)
   const [addForm, setAddForm] = useState<FormData>(emptyForm())
@@ -501,6 +519,10 @@ export function TradingCorporationsView() {
     setLinkedSubs(row.subsidiaries ?? [])
     setLinkedGifts(row.giftCorps ?? [])
     setSubmitError(null)
+    setLinkSubSearch("")
+    setLinkGiftSearch("")
+    setShowClosedSubs(false)
+    setShowClosedGifts(false)
   }
 
   async function handleAddPg(tradingCorpId: number, pgCompanyName: string) {
@@ -599,7 +621,7 @@ export function TradingCorporationsView() {
   }
 
   function tryAddLinkedSub(selectedId: string) {
-    const corp = subsidiaryOptions.find((c) => String(c.id) === selectedId)
+    const corp = filteredSubOptions.find((c) => String(c.id) === selectedId)
     if (!corp || !corp.id) return
     const link: LinkedCorp = { id: corp.id, name: corp.name }
     // 상품권 법인과 지역 비교
@@ -612,7 +634,7 @@ export function TradingCorporationsView() {
   }
 
   function tryAddLinkedGift(selectedId: string) {
-    const corp = giftCorpOptions.find((c) => String(c.id) === selectedId)
+    const corp = filteredGiftOptions.find((c) => String(c.id) === selectedId)
     if (!corp || !corp.id) return
     const link: LinkedCorp = { id: corp.id, name: corp.name }
     // 하위 법인과 지역 비교
@@ -1009,14 +1031,37 @@ export function TradingCorporationsView() {
                     <div className="flex flex-col gap-1.5">
                       <span className="text-xs text-muted-foreground">하위 법인</span>
                       {linkedSubs.length === 0 ? (
-                        <select
-                          className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
-                          defaultValue=""
-                          onChange={(e) => tryAddLinkedSub(e.target.value)}
-                        >
-                          <option value="" disabled>하위 법인 선택</option>
-                          {subsidiaryOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center gap-2">
+                            <Input
+                              value={linkSubSearch}
+                              onChange={(e) => setLinkSubSearch(e.target.value)}
+                              placeholder="법인명 검색..."
+                              className="h-8 text-xs"
+                            />
+                            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                              <input
+                                type="checkbox"
+                                checked={showClosedSubs}
+                                onChange={(e) => setShowClosedSubs(e.target.checked)}
+                                className="h-3.5 w-3.5"
+                              />
+                              폐업 보기
+                            </label>
+                          </div>
+                          <select
+                            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+                            defaultValue=""
+                            onChange={(e) => tryAddLinkedSub(e.target.value)}
+                          >
+                            <option value="" disabled>하위 법인 선택</option>
+                            {filteredSubOptions.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}{c.status === "폐업" ? " (폐업)" : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       ) : (
                         <div className="flex flex-col gap-2">
                           {linkedSubs.map((c) => {
@@ -1042,14 +1087,37 @@ export function TradingCorporationsView() {
                     <div className="flex flex-col gap-1.5">
                       <span className="text-xs text-muted-foreground">상품권 법인</span>
                       {linkedGifts.length === 0 ? (
-                        <select
-                          className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
-                          defaultValue=""
-                          onChange={(e) => tryAddLinkedGift(e.target.value)}
-                        >
-                          <option value="" disabled>상품권 법인 선택</option>
-                          {giftCorpOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center gap-2">
+                            <Input
+                              value={linkGiftSearch}
+                              onChange={(e) => setLinkGiftSearch(e.target.value)}
+                              placeholder="법인명 검색..."
+                              className="h-8 text-xs"
+                            />
+                            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                              <input
+                                type="checkbox"
+                                checked={showClosedGifts}
+                                onChange={(e) => setShowClosedGifts(e.target.checked)}
+                                className="h-3.5 w-3.5"
+                              />
+                              폐업 보기
+                            </label>
+                          </div>
+                          <select
+                            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+                            defaultValue=""
+                            onChange={(e) => tryAddLinkedGift(e.target.value)}
+                          >
+                            <option value="" disabled>상품권 법인 선택</option>
+                            {filteredGiftOptions.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}{c.status === "폐업" ? " (폐업)" : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       ) : (
                         <div className="flex flex-col gap-2">
                           {linkedGifts.map((c) => {
