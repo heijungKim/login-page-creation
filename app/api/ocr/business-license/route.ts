@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     console.log("[OCR] raw text:\n", rawText)
     const result = parseBusinessLicense(rawText)
     console.log("[OCR] parsed result:", JSON.stringify(result))
-    return NextResponse.json(result)
+    return NextResponse.json({ ...result, _rawText: rawText })
   } catch (e) {
     console.error("[OCR] 예외:", e)
     return NextResponse.json({ error: "OCR 처리에 실패했습니다." }, { status: 500 })
