@@ -38,6 +38,7 @@ type TradingCorp = {
   giftCorps: LinkedCorp[]
   pgs: PgEntry[]
   bizLicenseFileUrl?: string | null
+  commission: number | null
 }
 
 const TRADING_TYPE_OPTIONS = ["매입", "매출", "매입/매출", "기타"]
@@ -129,14 +130,14 @@ type FormData = {
   name: string; bizNo: string; corpNo: string; ceo: string; contact: string
   email: string; address: string; account: string; tradingType: string
   businessType: string; businessItem: string; note: string; openDate: string
-  bizLicenseFileUrl?: string
+  bizLicenseFileUrl?: string; commission: string
 }
 
 const emptyForm = (): FormData => ({
   name: "", bizNo: "", corpNo: "", ceo: "", contact: "",
   email: "", address: "", account: "", tradingType: "매입/매출",
   businessType: "", businessItem: "", note: "", openDate: "",
-  bizLicenseFileUrl: "",
+  bizLicenseFileUrl: "", commission: "",
 })
 
 function Field({ id, label, value, onChange, placeholder }: {
@@ -498,6 +499,7 @@ export function TradingCorporationsView() {
       tradingType: row.tradingType, businessType: row.businessType ?? "",
       businessItem: row.businessItem ?? "", note: row.note, openDate: row.openDate ?? "",
       bizLicenseFileUrl: row.bizLicenseFileUrl ?? "",
+      commission: row.commission != null ? String(row.commission) : "",
     })
     setEditAttachedFileName("")
     setDetailPgs(row.pgs ?? [])
@@ -639,7 +641,11 @@ export function TradingCorporationsView() {
     setSubmitError(null)
     setSubmitting(true)
     try {
-      const created = await api.post<TradingCorp>("/api/trading-corporations", { ...addForm, pgNames: addPgNames })
+      const created = await api.post<TradingCorp>("/api/trading-corporations", {
+        ...addForm,
+        pgNames: addPgNames,
+        commission: addForm.commission !== "" ? Number(addForm.commission) : null,
+      })
       setRows((prev) => [{ ...created, subsidiaries: created.subsidiaries ?? [], giftCorps: created.giftCorps ?? [], pgs: created.pgs ?? [] }, ...prev])
       setAddOpen(false)
       setAddForm(emptyForm())
@@ -656,7 +662,10 @@ export function TradingCorporationsView() {
     setSubmitError(null)
     setSubmitting(true)
     try {
-      const updated = await api.put<TradingCorp>(`/api/trading-corporations/${detail.id}`, editForm)
+      const updated = await api.put<TradingCorp>(`/api/trading-corporations/${detail.id}`, {
+        ...editForm,
+        commission: editForm.commission !== "" ? Number(editForm.commission) : null,
+      })
       const withLinks = { ...updated, subsidiaries: linkedSubs, giftCorps: linkedGifts, pgs: detailPgs }
       setRows((prev) => prev.map((r) => r.id === detail.id ? withLinks : r))
       setDetail(withLinks)
@@ -683,16 +692,8 @@ export function TradingCorporationsView() {
     }
   }
 
-  function handleExcelDownload() {
-    const corp = rows.find((r) => r.id === excelCorpId)
-    if (!corp) return
-    const cleanBizNo = corp.bizNo.replace(/-/g, "")
+  function buildExcelAndDownload(fileName: string, submitterBizNo: string, clientCorp: { bizNo?: string; residentNo?: string; hometaxId?: string; irosUserNo?: string; phone?: string; bizEmail?: string } | null | undefined) {
     const currentYear = new Date().getFullYear()
-    const fileName = `E_${cleanBizNo}_${currentYear}${excelQuarter}_1.xlsx`
-
-    const subCorpId = corp.subsidiaries?.[0]?.id
-    const subCorp = subCorpId ? allCorps.find((c) => c.id === subCorpId) : null
-
     const headerTexts = [
       "레코드\n구분", "결제\n연도", "분기\n구분", "제출자\n사업자번호", "일련\n번호",
       "의뢰업체\n사업자번호", "의뢰업체\n대표자주민번호", "의뢰업체\n관리번호",
@@ -710,15 +711,15 @@ export function TradingCorporationsView() {
     dataRow[0]  = "RD"
     dataRow[1]  = String(currentYear)
     dataRow[2]  = excelQuarter
-    dataRow[3]  = s(corp.bizNo)
+    dataRow[3]  = s(submitterBizNo)
     dataRow[4]  = "1"
-    dataRow[5]  = s(subCorp?.bizNo)
-    dataRow[6]  = s(subCorp?.residentNo)
-    dataRow[17] = s(subCorp?.hometaxId)
-    dataRow[18] = s(subCorp?.irosUserNo)
-    dataRow[19] = s(subCorp?.phone)
-    dataRow[20] = s(subCorp?.phone)
-    dataRow[21] = s(subCorp?.bizEmail)
+    dataRow[5]  = s(clientCorp?.bizNo)
+    dataRow[6]  = s(clientCorp?.residentNo)
+    dataRow[17] = s(clientCorp?.hometaxId)
+    dataRow[18] = s(clientCorp?.irosUserNo)
+    dataRow[19] = s(clientCorp?.phone)
+    dataRow[20] = s(clientCorp?.phone)
+    dataRow[21] = s(clientCorp?.bizEmail)
     dataRow[22] = "C"
 
     const headerStyle = {
@@ -772,6 +773,29 @@ export function TradingCorporationsView() {
     setExcelOpen(false)
   }
 
+  function handleTradingCorpExcel() {
+    const corp = rows.find((r) => r.id === excelCorpId)
+    if (!corp) return
+    const currentYear = new Date().getFullYear()
+    const fileName = `E_${corp.bizNo.replace(/-/g, "")}_${currentYear}${excelQuarter}_1.xlsx`
+    const subCorpId = corp.subsidiaries?.[0]?.id
+    const subCorp = subCorpId ? allCorps.find((c) => c.id === subCorpId) : null
+    buildExcelAndDownload(fileName, corp.bizNo, subCorp)
+  }
+
+  function handleSubsidiaryExcel() {
+    const corp = rows.find((r) => r.id === excelCorpId)
+    if (!corp) return
+    const currentYear = new Date().getFullYear()
+    const subCorpId = corp.subsidiaries?.[0]?.id
+    const subCorp = subCorpId ? allCorps.find((c) => c.id === subCorpId) : null
+    const giftCorpId = corp.giftCorps?.[0]?.id
+    const giftCorp = giftCorpId ? allCorps.find((c) => c.id === giftCorpId) : null
+    const submitterBizNo = subCorp?.bizNo ?? ""
+    const fileName = `E_${submitterBizNo.replace(/-/g, "")}_${currentYear}${excelQuarter}_1.xlsx`
+    buildExcelAndDownload(fileName, submitterBizNo, giftCorp)
+  }
+
   const totalCols = columns.length + 2
 
   return (
@@ -793,7 +817,7 @@ export function TradingCorporationsView() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Button size="sm" variant="outline" onClick={() => { setExcelCorpId(""); setExcelQuarter("1"); setExcelOpen(true) }}>
+          <Button size="sm" variant="outline" onClick={() => { setExcelCorpId(""); setExcelQuarter(String(Math.ceil((new Date().getMonth() + 1) / 3))); setExcelOpen(true) }}>
             <Download className="h-4 w-4 mr-1" />
             엑셀 다운로드
           </Button>
@@ -930,6 +954,10 @@ export function TradingCorporationsView() {
                     </div>
                     <Field id="e-businessType" label="업태" value={editForm.businessType} onChange={(v) => setEditForm((f) => ({ ...f, businessType: v }))} placeholder="예: 서비스업" />
                     <Field id="e-businessItem" label="종목" value={editForm.businessItem} onChange={(v) => setEditForm((f) => ({ ...f, businessItem: v }))} placeholder="예: 소프트웨어 개발" />
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="e-commission" className="text-xs text-muted-foreground">수수료 (원)</Label>
+                      <Input id="e-commission" type="number" value={editForm.commission} onChange={(e) => setEditForm((f) => ({ ...f, commission: e.target.value }))} placeholder="0" />
+                    </div>
                     <div className="col-span-1 sm:col-span-2">
                       <Field id="e-address" label="주소" value={editForm.address} onChange={(v) => setEditForm((f) => ({ ...f, address: v }))} />
                     </div>
@@ -976,6 +1004,7 @@ export function TradingCorporationsView() {
                     <DF label="이메일" value={detail.email} />
                     <DF label="업태" value={detail.businessType} />
                     <DF label="종목" value={detail.businessItem} />
+                    <DF label="수수료" value={detail.commission != null ? detail.commission.toLocaleString("ko-KR") + " 원" : ""} />
                     <DF label="주소" value={detail.address} className="col-span-1 sm:col-span-2" />
                     <DF label="계좌번호" value={detail.account} className="col-span-1 sm:col-span-2" />
                     <DF label="비고" value={detail.note} className="col-span-1 sm:col-span-2" />
@@ -1183,6 +1212,10 @@ export function TradingCorporationsView() {
               </div>
               <Field id="a-businessType" label="업태" value={addForm.businessType} onChange={(v) => setAddForm((f) => ({ ...f, businessType: v }))} placeholder="예: 서비스업" />
               <Field id="a-businessItem" label="종목" value={addForm.businessItem} onChange={(v) => setAddForm((f) => ({ ...f, businessItem: v }))} placeholder="예: 소프트웨어 개발" />
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="a-commission" className="text-xs text-muted-foreground">수수료 (원)</Label>
+                <Input id="a-commission" type="number" value={addForm.commission} onChange={(e) => setAddForm((f) => ({ ...f, commission: e.target.value }))} placeholder="0" />
+              </div>
               <div className="col-span-1 sm:col-span-2">
                 <Field id="a-address" label="주소" value={addForm.address} onChange={(v) => setAddForm((f) => ({ ...f, address: v }))} />
               </div>
@@ -1227,6 +1260,29 @@ export function TradingCorporationsView() {
                 ))}
               </select>
             </div>
+            {excelCorpId && (() => {
+              const corp = rows.find((r) => r.id === excelCorpId)
+              const subList = corp?.subsidiaries ?? []
+              const giftList = corp?.giftCorps ?? []
+              return (
+                <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 px-3 py-3">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-muted-foreground">하위 법인</span>
+                    {subList.length === 0
+                      ? <span className="text-xs text-muted-foreground">없음</span>
+                      : subList.map((s) => <span key={s.id} className="text-xs text-foreground">{s.name}</span>)
+                    }
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-muted-foreground">상품권 법인</span>
+                    {giftList.length === 0
+                      ? <span className="text-xs text-muted-foreground">없음</span>
+                      : giftList.map((g) => <span key={g.id} className="text-xs text-foreground">{g.name}</span>)
+                    }
+                  </div>
+                </div>
+              )
+            })()}
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs text-muted-foreground">분기</Label>
               <select
@@ -1240,17 +1296,16 @@ export function TradingCorporationsView() {
                 <option value="4">4분기</option>
               </select>
             </div>
-            {excelCorpId && (
-              <p className="text-xs text-muted-foreground">
-                파일명: <span className="font-medium text-foreground">E_{rows.find(r => r.id === excelCorpId)?.bizNo.replace(/-/g, "")}_2026{excelQuarter}_1.xlsx</span>
-              </p>
-            )}
           </div>
           <DialogFooter className="border-t border-border px-6 pt-5 pb-8 gap-3">
             <Button variant="outline" className="flex-1" onClick={() => setExcelOpen(false)}>취소</Button>
-            <Button className="flex-1" disabled={!excelCorpId} onClick={handleExcelDownload}>
+            <Button variant="outline" className="flex-1" disabled={!excelCorpId} onClick={handleTradingCorpExcel}>
               <Download className="h-4 w-4 mr-1" />
-              다운로드
+              거래 법인 엑셀
+            </Button>
+            <Button className="flex-1" disabled={!excelCorpId} onClick={handleSubsidiaryExcel}>
+              <Download className="h-4 w-4 mr-1" />
+              하위 법인 엑셀
             </Button>
           </DialogFooter>
         </DialogContent>

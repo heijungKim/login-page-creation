@@ -39,6 +39,10 @@ export function ErpLayout({ onLogout }: { onLogout: () => void }) {
   }, [active])
 
   useEffect(() => {
+    document.title = `Freed | ${activeLabel}`
+  }, [activeLabel])
+
+  useEffect(() => {
     function onHashChange() {
       const hash = window.location.hash.slice(1)
       if (validIds.has(hash)) setActive(hash)
