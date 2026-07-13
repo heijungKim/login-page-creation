@@ -128,11 +128,11 @@ function parseBusinessLicense(text: string) {
     /업\s*태\s+(.+?)(?=\s+종\s*목|\n|$)/,
   ])
 
-  // 종목
+  // 종목 (점 제거)
   const businessItem = first(t, [
     /종\s*목\s*[：:]?\s*([^\n]+)/,
     /종\s*목\s+([^\n]+)/,
-  ])
+  ]).replace(/\./g, "").trim()
 
   return { name, bizNo, corpNo, ceo, openDate, bizAddress, businessType, businessItem }
 }

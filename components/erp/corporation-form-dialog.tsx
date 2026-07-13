@@ -61,6 +61,12 @@ export function OcrPreviewDialog({
     for (const { key } of OCR_FIELDS) init[key] = !!data[key]
     return init
   })
+  const [edits, setEdits] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {}
+    for (const { key } of OCR_FIELDS) init[key] = data[key] ?? ""
+    return init
+  })
+  const [editingKey, setEditingKey] = useState<string | null>(null)
 
   const selectedCount = Object.values(checked).filter(Boolean).length
 
@@ -68,10 +74,18 @@ export function OcrPreviewDialog({
     setChecked((prev) => ({ ...prev, [key]: !prev[key] }))
   }
 
+  function commitEdit(key: string) {
+    setEditingKey(null)
+    const val = edits[key]?.trim() ?? ""
+    setEdits((prev) => ({ ...prev, [key]: val }))
+    setChecked((prev) => ({ ...prev, [key]: !!val }))
+  }
+
   function handleApply() {
     const selected: Partial<OcrData> = {}
     for (const { key } of OCR_FIELDS) {
-      if (checked[key] && data[key]) selected[key] = data[key]
+      const val = edits[key]?.trim()
+      if (checked[key] && val) selected[key] = val
     }
     onApply(selected)
   }
@@ -81,7 +95,7 @@ export function OcrPreviewDialog({
       <DialogContent className="sm:max-w-4xl w-full gap-0 overflow-hidden p-0">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle>사업자등록증 인식 결과</DialogTitle>
-          <DialogDescription>인식된 항목을 확인하고 적용할 항목을 선택하세요.</DialogDescription>
+          <DialogDescription>인식된 항목을 확인하고, 값을 클릭하면 직접 수정할 수 있습니다.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col sm:flex-row max-h-[75vh] overflow-hidden">
           {/* 이미지 미리보기 */}
@@ -91,37 +105,56 @@ export function OcrPreviewDialog({
           </div>
           {/* 인식 결과 */}
           <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-1">
-            <p className="text-xs text-muted-foreground mb-3">적용할 항목을 선택하세요.</p>
+            <p className="text-xs text-muted-foreground mb-3">적용할 항목을 선택하고, 값을 클릭하면 수정할 수 있습니다.</p>
             {OCR_FIELDS.map(({ key, label }) => {
-              const val = data[key]
-              const recognized = !!val
-              const on = recognized && checked[key]
+              const val = edits[key] ?? ""
+              const hasVal = !!val
+              const on = hasVal && checked[key]
+              const isEditing = editingKey === key
+              const isChanged = val !== (data[key] ?? "")
               return (
-                <label
+                <div
                   key={key}
-                  className={cn(
-                    "flex items-center gap-3 py-2 border-b border-border/50 last:border-0",
-                    recognized ? "cursor-pointer" : "cursor-default opacity-40",
-                  )}
+                  className="flex items-center gap-3 py-2 border-b border-border/50 last:border-0"
                 >
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded shrink-0"
+                    className="h-4 w-4 rounded shrink-0 cursor-pointer"
                     checked={on}
-                    disabled={!recognized}
-                    onChange={() => recognized && toggle(key)}
+                    onChange={() => hasVal && toggle(key)}
                   />
                   <span className="w-24 shrink-0 text-xs text-muted-foreground">{label}</span>
                   <span className="text-xs text-muted-foreground">=</span>
-                  <span className={cn("flex-1 text-sm truncate", recognized ? "font-medium text-foreground" : "italic text-muted-foreground")}>
-                    {val || "인식 안됨"}
-                  </span>
-                  {recognized && (
+                  {isEditing ? (
+                    <Input
+                      autoFocus
+                      value={val}
+                      onChange={(e) => setEdits((prev) => ({ ...prev, [key]: e.target.value }))}
+                      onBlur={() => commitEdit(key)}
+                      onKeyDown={(e) => { if (e.key === "Enter") commitEdit(key) }}
+                      className="flex-1 h-7 text-sm py-0"
+                    />
+                  ) : (
+                    <span
+                      onClick={() => setEditingKey(key)}
+                      title="클릭하여 수정"
+                      className={cn(
+                        "flex-1 text-sm truncate cursor-text rounded px-1 -mx-1 hover:bg-accent transition-colors",
+                        hasVal ? "font-medium text-foreground" : "italic text-muted-foreground",
+                      )}
+                    >
+                      {val || "인식 안됨 · 클릭하여 입력"}
+                    </span>
+                  )}
+                  {isChanged && !isEditing && hasVal && (
+                    <span className="shrink-0 text-[10px] text-amber-600 font-medium">수정됨</span>
+                  )}
+                  {!isEditing && (
                     <span className={cn("shrink-0 text-[11px] font-medium px-1.5 py-0.5 rounded-full", on ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>
                       {on ? "적용" : "제외"}
                     </span>
                   )}
-                </label>
+                </div>
               )
             })}
           </div>
