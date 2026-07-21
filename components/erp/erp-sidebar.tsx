@@ -115,7 +115,7 @@ export function ErpSidebar({
       </div>
 
       {/* 메뉴 */}
-      <nav className="flex-1 overflow-y-auto py-3 px-3" aria-label="주 메뉴">
+      <nav className="flex-1 overflow-y-auto py-3 px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="주 메뉴">
         {menuGroups.map((group, gIdx) => (
           <div key={gIdx} className={cn(gIdx > 0 && "mt-5")}>
             {group.label && (

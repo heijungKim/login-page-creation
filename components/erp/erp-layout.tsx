@@ -84,7 +84,7 @@ export function ErpLayout({ onLogout }: { onLogout: () => void }) {
             onLogout={onLogout}
             onMenuToggle={() => setSidebarOpen((o) => !o)}
           />
-          <main className="flex-1 overflow-y-auto p-3 pb-20 sm:p-4 sm:pb-20 md:p-6 md:pb-6">
+          <main className="flex-1 overflow-y-auto p-3 pb-20 sm:p-4 sm:pb-20 md:p-6 md:pb-6 [&>*]:min-h-full">
             {active === "dashboard" ? (
               <DashboardView />
             ) : active === "corporations" ? (
