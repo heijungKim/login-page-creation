@@ -84,7 +84,7 @@ type Column = {
 
 const columns: Column[] = [
   { key: "category", label: "구분", minWidth: "130px", filterOptions: CATEGORY_OPTIONS },
-  { key: "item", label: "비용항목", minWidth: "160px" },
+  { key: "item", label: "비용항목", minWidth: "220px" },
   { key: "amount", label: "금액", minWidth: "130px" },
   { key: "cycle", label: "지급주기", minWidth: "110px", filterOptions: CYCLE_OPTIONS },
   { key: "payDay", label: "지급일", minWidth: "100px" },
@@ -94,7 +94,7 @@ const columns: Column[] = [
   { key: "registeredAt", label: "등록일", minWidth: "110px" },
 ]
 
-const stickyOffsets = [0, 130, 290]
+const stickyOffsets = [0, 130, 350]
 
 function Chip({ label, styleMap }: { label: string; styleMap: Record<string, string> }) {
   return (
