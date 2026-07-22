@@ -534,9 +534,12 @@ export function FixedCostView() {
                           key={col.key}
                           className={cn(
                             "whitespace-nowrap px-3 py-2.5 text-foreground",
-                            colIdx < 3 && "sm:sticky sm:z-10 bg-card group-hover:bg-accent",
+                            colIdx < 3 && "sm:sticky sm:z-10 bg-card group-hover:bg-accent overflow-hidden",
                           )}
-                          style={{ left: colIdx < 3 ? stickyOffsets[colIdx] : undefined }}
+                          style={{
+                            left: colIdx < 3 ? stickyOffsets[colIdx] : undefined,
+                            maxWidth: colIdx < 3 ? col.minWidth : undefined,
+                          }}
                         >
                           {col.key === "category" ? (
                             <Chip label={row.category === "기타" && row.categoryEtc ? row.categoryEtc : row.category} styleMap={categoryStyles} />
@@ -549,7 +552,7 @@ export function FixedCostView() {
                           ) : col.key === "memo" ? (
                             <span className="text-muted-foreground">{row[col.key] || "-"}</span>
                           ) : (
-                            String(row[col.key] ?? "") || "-"
+                            <span className={cn(colIdx < 3 && "block truncate")}>{String(row[col.key] ?? "") || "-"}</span>
                           )}
                         </td>
                       ))}
