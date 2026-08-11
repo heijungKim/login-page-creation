@@ -16,6 +16,7 @@ import {
   Users,
   X,
   Briefcase,
+  MessageSquare,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -62,6 +63,12 @@ const menuGroups: MenuGroup[] = [
       { id: "business-income", label: "사업소득", icon: TrendingUp },
       { id: "tax-progress", label: "월 세무 진행현황", icon: CalendarCheck },
       { id: "trading-corporations", label: "거래 법인", icon: Briefcase },
+    ],
+  },
+  {
+    label: "홈페이지",
+    items: [
+      { id: "inquiry", label: "문의 게시판", icon: MessageSquare },
     ],
   },
   {
