@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import { ChangeHistory } from "@/components/erp/change-history"
 import {
   Select,
   SelectContent,
@@ -257,6 +258,7 @@ export function ClosedCorporationsView() {
                   {detail.registeredAt && (
                     <p className="text-xs text-muted-foreground">등록일: {detail.registeredAt}</p>
                   )}
+                  <ChangeHistory entityType="Corporation" entityId={detail.id} refreshKey={JSON.stringify(detail)} />
                 </div>
               </div>
               <DialogFooter className="border-t border-border px-6 py-4">

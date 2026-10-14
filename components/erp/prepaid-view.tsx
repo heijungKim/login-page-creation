@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { cn, toCommaNumber } from "@/lib/utils"
 import { ApiError, api } from "@/lib/api"
+import { ChangeHistory } from "@/components/erp/change-history"
 
 type PrepaidEntry = {
   id: number
@@ -803,6 +804,7 @@ export function PrepaidView() {
                   </Button>
                 </div>
               </div>
+              <ChangeHistory entityType="PrepaidPerson" entityId={detail.personKey} refreshKey={JSON.stringify(detailHistory)} />
             </div>
           )}
           <DialogFooter>

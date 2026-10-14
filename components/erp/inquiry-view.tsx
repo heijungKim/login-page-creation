@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { api } from "@/lib/api"
+import { ChangeHistory } from "@/components/erp/change-history"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -145,6 +146,7 @@ export function InquiryView() {
                 <span className="text-xs text-muted-foreground">문의 내용</span>
                 <p className="text-sm whitespace-pre-wrap rounded-md border border-border bg-muted/40 px-3 py-2.5">{detail.message || "-"}</p>
               </div>
+              <ChangeHistory entityType="Inquiry" entityId={detail.id} refreshKey={JSON.stringify(detail)} />
             </div>
           )}
         </DialogContent>

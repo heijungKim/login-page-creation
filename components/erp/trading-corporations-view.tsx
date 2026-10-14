@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { ApiError, api } from "@/lib/api"
+import { ChangeHistory } from "@/components/erp/change-history"
 import { useCorporations } from "@/components/erp/corporations-context"
 import { OcrPreviewDialog, type OcrData, SIDO_LIST, SIGUNGU_MAP, deriveRegion } from "@/components/erp/corporation-form-dialog"
 
@@ -1110,6 +1111,7 @@ export function TradingCorporationsView() {
                     {linkSaving && <p className="text-xs text-muted-foreground">저장 중...</p>}
                   </div>
                 )}
+                <ChangeHistory entityType="TradingCorporation" entityId={detail.id} refreshKey={`${JSON.stringify(detail)}|${detailPgs.map((p) => p.id).join(",")}`} />
               </div>
 
               <DialogFooter className="border-t border-border px-6 pt-5 pb-8 gap-3">

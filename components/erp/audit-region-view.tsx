@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { ApiError, api } from "@/lib/api"
+import { ChangeHistory } from "@/components/erp/change-history"
 
 type AuditEntry = {
   id: number
@@ -577,6 +578,7 @@ export function AuditRegionView() {
                     </div>
                   )}
                 </div>
+                <ChangeHistory entityType="AuditRegion" entityId={detail.id} refreshKey={JSON.stringify(detail)} />
               </div>
             )
           })()}

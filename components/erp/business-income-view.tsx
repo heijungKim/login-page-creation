@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { cn, toCommaNumber } from "@/lib/utils"
 import { ApiError, api } from "@/lib/api"
+import { ChangeHistory } from "@/components/erp/change-history"
 
 type PaymentEntry = {
   id: number
@@ -1069,6 +1070,7 @@ export function BusinessIncomeView() {
                   {payRevenue > 0 && <TaxPreviewCards reportType={paymentForm.reportType} amount={payAmount} />}
                 </div>
               </div>
+              <ChangeHistory entityType="BusinessIncome" entityId={detail.id} refreshKey={JSON.stringify(detail)} />
             </div>
           )}
 

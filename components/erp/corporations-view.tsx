@@ -4,6 +4,7 @@ import React, { useMemo, useRef, useState } from "react"
 import { Loader2, MessageSquareText, Paperclip, Plus, Trash2, Upload, X } from "lucide-react"
 import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { api, ApiError } from "@/lib/api"
+import { ChangeHistory } from "@/components/erp/change-history"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -885,6 +886,7 @@ export function CorporationsView() {
                   {detail.registeredAt && !isEditing && (
                     <p className="text-xs text-muted-foreground">등록일: {detail.registeredAt}</p>
                   )}
+                  <ChangeHistory entityType="Corporation" entityId={detail.id} refreshKey={JSON.stringify(detail)} />
                 </div>
               </div>
               {saveError && (

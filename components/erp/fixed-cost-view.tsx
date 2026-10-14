@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select"
 import { cn, toCommaNumber } from "@/lib/utils"
 import { ApiError, api } from "@/lib/api"
+import { ChangeHistory } from "@/components/erp/change-history"
 
 type FixedCost = {
   id: number
@@ -689,6 +690,7 @@ export function FixedCostView() {
                       </div>
                     )}
                   </div>
+                  <ChangeHistory entityType="FixedCost" entityId={detail.id} refreshKey={`${JSON.stringify(detail)}|${payments.map((p) => p.id).join(",")}`} />
                 </div>
               </div>
               <DialogFooter className="border-t border-border px-6 py-5">

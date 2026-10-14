@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { api, ApiError } from "@/lib/api"
+import { ChangeHistory } from "@/components/erp/change-history"
 import { getAccessToken } from "@/lib/auth"
 
 type AdminUser = {
@@ -536,6 +537,7 @@ export function UserManagementView() {
               </div>
             </div>
             {editError && <p className="text-sm text-destructive">{editError}</p>}
+            {editTarget && <ChangeHistory entityType="Admin" entityId={editTarget.id} refreshKey={JSON.stringify(editTarget)} />}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditTarget(null)}>취소</Button>
               <Button type="submit" disabled={editLoading}>{editLoading ? "저장 중..." : "저장"}</Button>
