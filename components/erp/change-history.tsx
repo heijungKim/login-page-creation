@@ -161,6 +161,8 @@ const FIELD_LABELS: Record<string, string> = {
   year: "연도",
   month: "월",
   entryDate: "일자",
+  completed: "완료",
+  completedAt: "완료 일시",
   date: "일자",
   type: "유형",
   description: "내용",

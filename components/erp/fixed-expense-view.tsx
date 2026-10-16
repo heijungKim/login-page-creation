@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react"
-import { Trash2, ChevronLeft, ChevronRight, Save, Plus } from "lucide-react"
+import { Trash2, ChevronLeft, ChevronRight, Save, Plus, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -9,7 +9,25 @@ import { cn, toCommaNumber } from "@/lib/utils"
 import { api, ApiError } from "@/lib/api"
 
 type Item = { id: number; itemName: string; createdAt: string }
-type Entry = { id: number; itemId: number; year: number; month: number; entryDate: string; amount: number; memo: string }
+type Entry = {
+  id: number
+  itemId: number
+  year: number
+  month: number
+  entryDate: string
+  amount: number
+  memo: string
+  completed: boolean
+  completedAt: string | null
+}
+
+function formatCompletedAt(iso: string | null) {
+  if (!iso) return ""
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ""
+  const p = (n: number) => String(n).padStart(2, "0")
+  return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())} 완료`
+}
 
 type RowState = {
   entryDate: string
@@ -25,6 +43,27 @@ function makeRowState(entry?: Entry): RowState {
     memo: entry?.memo ?? "",
     error: "",
   }
+}
+
+/** 저장된 내역과 비교해 입력값이 바뀌었는지 */
+function isRowDirty(row: RowState, entry?: Entry): boolean {
+  const saved = makeRowState(entry)
+  return (
+    row.entryDate !== saved.entryDate ||
+    Number(row.amount.replace(/,/g, "") || 0) !== Number(saved.amount.replace(/,/g, "") || 0) ||
+    row.memo !== saved.memo
+  )
+}
+
+/** 하나라도 입력했다면 날짜와 금액은 필수. 문제 없으면 null */
+function validateRow(row: RowState): string | null {
+  const hasDate = row.entryDate.trim() !== ""
+  const hasAmount = Number(row.amount.replace(/,/g, "")) > 0
+  const hasMemo = row.memo.trim() !== ""
+  if (!(hasDate || hasAmount || hasMemo)) return null
+  if (!hasDate) return "날짜를 입력해주세요."
+  if (!hasAmount) return "금액을 입력해주세요."
+  return null
 }
 
 export function FixedExpenseView() {
@@ -50,6 +89,10 @@ export function FixedExpenseView() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [completingIds, setCompletingIds] = useState<Set<number>>(new Set())
+  // 완료된 행 중 수정 버튼을 눌러 편집 중인 행
+  const [editingIds, setEditingIds] = useState<Set<number>>(new Set())
+  const [rowSavingIds, setRowSavingIds] = useState<Set<number>>(new Set())
 
   function prevMonth() {
     if (month === 1) { setYear((y) => y - 1); setMonth(12) }
@@ -76,6 +119,7 @@ export function FixedExpenseView() {
         states[item.id] = makeRowState(entry)
       }
       setRowStates(states)
+      setEditingIds(new Set())
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "데이터를 불러오지 못했습니다.")
     } finally {
@@ -110,26 +154,51 @@ export function FixedExpenseView() {
     }
   }
 
-  // 전체 저장
+  function entryOf(itemId: number): Entry | undefined {
+    return entries.find((e) => e.itemId === itemId && e.year === year && e.month === month)
+  }
+
+  function upsertEntry(saved: Entry) {
+    setEntries((prev) =>
+      prev.some((e) => e.itemId === saved.itemId)
+        ? prev.map((e) => (e.itemId === saved.itemId ? saved : e))
+        : [...prev, saved],
+    )
+  }
+
+  function markSet(setter: typeof setEditingIds, id: number, on: boolean) {
+    setter((prev) => {
+      const next = new Set(prev)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
+  function postSave(itemId: number, row: RowState, editCompleted = false) {
+    return api.post<Entry>("/api/fixed-expense-entries/save", {
+      itemId,
+      year,
+      month,
+      entryDate: row.entryDate,
+      amount: Number(row.amount.replace(/,/g, "") || 0),
+      memo: row.memo,
+      editCompleted,
+    })
+  }
+
+  // 전체 저장 (완료된 항목은 잠겨 있으므로 제외)
   async function handleSaveAll() {
     const newStates = { ...rowStates }
     let hasError = false
+    const editable = items.filter((item) => !entryOf(item.id)?.completed)
 
-    for (const item of items) {
+    for (const item of editable) {
       const row = rowStates[item.id] ?? makeRowState()
-      const hasDate = row.entryDate.trim() !== ""
-      const hasAmount = Number(row.amount.replace(/,/g, "")) > 0
-      const hasMemo = row.memo.trim() !== ""
-      const hasAny = hasDate || hasAmount || hasMemo
-
-      if (hasAny) {
-        if (!hasDate) {
-          newStates[item.id] = { ...row, error: "날짜를 입력해주세요." }
-          hasError = true
-        } else if (!hasAmount) {
-          newStates[item.id] = { ...row, error: "금액을 입력해주세요." }
-          hasError = true
-        }
+      const err = validateRow(row)
+      if (err) {
+        newStates[item.id] = { ...row, error: err }
+        hasError = true
       }
     }
 
@@ -138,7 +207,7 @@ export function FixedExpenseView() {
       return
     }
 
-    const targets = items.filter((item) => {
+    const targets = editable.filter((item) => {
       const row = rowStates[item.id] ?? makeRowState()
       return row.entryDate.trim() !== "" && Number(row.amount.replace(/,/g, "")) > 0
     })
@@ -147,35 +216,82 @@ export function FixedExpenseView() {
 
     setSaving(true)
     try {
-      const results = await Promise.all(
-        targets.map((item) => {
-          const row = rowStates[item.id]
-          return api.post<Entry>("/api/fixed-expense-entries/save", {
-            itemId: item.id,
-            year,
-            month,
-            entryDate: row.entryDate,
-            amount: Number(row.amount.replace(/,/g, "")),
-            memo: row.memo,
-          })
-        })
-      )
-      setEntries((prev) => {
-        let updated = [...prev]
-        for (const saved of results) {
-          const exists = updated.find((e) => e.itemId === saved.itemId)
-          updated = exists
-            ? updated.map((e) => (e.itemId === saved.itemId ? saved : e))
-            : [...updated, saved]
-        }
-        return updated
-      })
+      const results = await Promise.all(targets.map((item) => postSave(item.id, rowStates[item.id])))
+      results.forEach(upsertEntry)
       setSavedMsg(true)
       setTimeout(() => setSavedMsg(false), 2000)
-    } catch {
-      alert("저장 실패")
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : "저장 실패")
     } finally {
       setSaving(false)
+    }
+  }
+
+  // 완료된 행: 수정 시작
+  function startEdit(item: Item) {
+    markSet(setEditingIds, item.id, true)
+  }
+
+  // 완료된 행: 수정 취소 (저장된 값으로 되돌림)
+  function cancelEdit(item: Item) {
+    setRowStates((prev) => ({ ...prev, [item.id]: makeRowState(entryOf(item.id)) }))
+    markSet(setEditingIds, item.id, false)
+  }
+
+  // 완료된 행: 수정 내용 저장
+  async function saveEdit(item: Item) {
+    const row = rowStates[item.id] ?? makeRowState()
+    const err = validateRow(row)
+    if (err) {
+      setRowStates((prev) => ({ ...prev, [item.id]: { ...row, error: err } }))
+      return
+    }
+    markSet(setRowSavingIds, item.id, true)
+    try {
+      const saved = await postSave(item.id, row, true)
+      upsertEntry(saved)
+      setRowStates((prev) => ({ ...prev, [item.id]: makeRowState(saved) }))
+      markSet(setEditingIds, item.id, false)
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : "저장 실패")
+    } finally {
+      markSet(setRowSavingIds, item.id, false)
+    }
+  }
+
+  // 항목 완료 처리 / 해제 (즉시 저장)
+  async function handleToggleComplete(item: Item, completed: boolean) {
+    const row = rowStates[item.id] ?? makeRowState()
+    const entry = entryOf(item.id)
+
+    // 저장 안 된 입력이 있는 상태로 완료하면 그 값을 먼저 저장한 뒤 잠근다
+    if (completed && isRowDirty(row, entry)) {
+      const err = validateRow(row)
+      if (err) {
+        setRowStates((prev) => ({ ...prev, [item.id]: { ...row, error: `완료하려면 ${err}` } }))
+        return
+      }
+    }
+
+    markSet(setCompletingIds, item.id, true)
+    try {
+      if (completed && isRowDirty(row, entry)) {
+        const savedRow = await postSave(item.id, row)
+        upsertEntry(savedRow)
+      }
+      const saved = await api.post<Entry>("/api/fixed-expense-entries/complete", {
+        itemId: item.id,
+        year,
+        month,
+        completed,
+      })
+      upsertEntry(saved)
+      setRowStates((prev) => ({ ...prev, [item.id]: makeRowState(saved) }))
+      markSet(setEditingIds, item.id, false)
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : "완료 처리 실패")
+    } finally {
+      markSet(setCompletingIds, item.id, false)
     }
   }
 
@@ -221,6 +337,12 @@ export function FixedExpenseView() {
     .filter((e) => e.year === year && e.month === month)
     .reduce((sum, e) => sum + e.amount, 0)
 
+  const completedItemIds = useMemo(
+    () => new Set(entries.filter((e) => e.year === year && e.month === month && e.completed).map((e) => e.itemId)),
+    [entries, year, month],
+  )
+  const completedCount = items.filter((i) => completedItemIds.has(i.id)).length
+
   // 날짜 기준 오름차순 정렬 (1일 → 말일, 날짜 없는 항목은 맨 아래)
   const sortedItems = useMemo(() => {
     return [...items].sort((a, b) => {
@@ -236,6 +358,7 @@ export function FixedExpenseView() {
   }, [items, rowStates])
 
   const hasChanges = items.some((item) => {
+    if (completedItemIds.has(item.id)) return false
     const row = rowStates[item.id] ?? makeRowState()
     return row.entryDate.trim() !== "" || Number(row.amount.replace(/,/g, "")) > 0
   })
@@ -246,7 +369,14 @@ export function FixedExpenseView() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-0.5">
           <h2 className="mobile-hidden text-lg font-semibold">고정지출</h2>
-          <p className="text-sm text-muted-foreground">전체 {items.length}개 항목</p>
+          <p className="text-sm text-muted-foreground">
+            전체 {items.length}개 항목
+            {items.length > 0 && (
+              <span className={cn("ml-2 font-medium", completedCount === items.length ? "text-emerald-600" : "text-foreground")}>
+                · {month}월 완료 {completedCount}/{items.length}
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {bulkMode ? (
@@ -320,33 +450,41 @@ export function FixedExpenseView() {
                   />
                 </th>
               )}
+              <th className="px-4 py-3 font-medium w-[64px] text-center">완료</th>
               <th className="px-4 py-3 font-medium w-[150px]">날짜</th>
               <th className="px-4 py-3 font-medium w-[280px]">항목명</th>
               <th className="px-4 py-3 font-medium w-[150px]">금액 (원)</th>
               <th className="px-4 py-3 font-medium w-[160px]">메모</th>
-              <th className="px-4 py-3 w-[48px]" />
+              <th className="px-4 py-3 w-[150px]" />
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="py-16 text-center text-muted-foreground">불러오는 중...</td>
+                <td colSpan={bulkMode ? 7 : 6} className="py-16 text-center text-muted-foreground">불러오는 중...</td>
               </tr>
             ) : sortedItems.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-16 text-center text-muted-foreground">
+                <td colSpan={bulkMode ? 7 : 6} className="py-16 text-center text-muted-foreground">
                   위에서 항목을 추가하세요.
                 </td>
               </tr>
             ) : (
               sortedItems.map((item) => {
                 const row = rowStates[item.id] ?? makeRowState()
+                const entry = entries.find((e) => e.itemId === item.id && e.year === year && e.month === month)
+                const completed = completedItemIds.has(item.id)
+                const completing = completingIds.has(item.id)
+                const editing = completed && editingIds.has(item.id)
+                const locked = completed && !editing
+                const dirty = editing && isRowDirty(row, entry)
+                const rowSaving = rowSavingIds.has(item.id)
                 return (
                   <tr
                     key={item.id}
                     className={cn(
                       "border-b border-border last:border-0 transition-colors",
-                      row.error ? "bg-destructive/5" : "hover:bg-muted/10"
+                      row.error ? "bg-destructive/5" : editing ? "bg-amber-50/70" : completed ? "bg-emerald-50/60 hover:bg-emerald-50" : "hover:bg-muted/10"
                     )}
                   >
                     {bulkMode && (
@@ -364,16 +502,35 @@ export function FixedExpenseView() {
                         />
                       </td>
                     )}
+                    <td className="px-4 py-2 text-center">
+                      <input
+                        type="checkbox"
+                        aria-label={`${item.itemName} 완료`}
+                        title={editing ? "수정 중에는 완료 상태를 바꿀 수 없습니다" : completed ? "완료 해제" : "완료 처리"}
+                        className="h-4 w-4 cursor-pointer rounded border-border accent-emerald-600 disabled:cursor-wait disabled:opacity-50"
+                        checked={completed}
+                        disabled={completing || editing || rowSaving}
+                        onChange={(e) => void handleToggleComplete(item, e.target.checked)}
+                      />
+                    </td>
                     <td className="px-4 py-2">
                       <Input
                         type="date"
                         value={row.entryDate}
                         onChange={(e) => setRow(item.id, { entryDate: e.target.value })}
+                        disabled={locked || rowSaving}
                         className={cn("h-8 text-xs w-full", row.error && !row.entryDate && "border-destructive")}
                       />
                     </td>
                     <td className="px-4 py-2 font-medium">
-                      {item.itemName}
+                      <span className={cn(completed && "text-muted-foreground line-through decoration-muted-foreground/60")}>
+                        {item.itemName}
+                      </span>
+                      {completed && entry?.completedAt && (
+                        <span className="ml-2 inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                          {formatCompletedAt(entry.completedAt)}
+                        </span>
+                      )}
                       {row.error && <p className="text-[11px] text-destructive mt-0.5">{row.error}</p>}
                     </td>
                     <td className="px-4 py-2">
@@ -383,25 +540,46 @@ export function FixedExpenseView() {
                         placeholder="0"
                         className={cn("h-8 text-xs text-right tabular-nums w-full", row.error && !Number(row.amount.replace(/,/g, "")) && "border-destructive")}
                         inputMode="numeric"
+                        disabled={locked || rowSaving}
                       />
                     </td>
                     <td className="px-4 py-2">
                       <Input
                         value={row.memo}
                         onChange={(e) => setRow(item.id, { memo: e.target.value })}
-                        placeholder="메모 (선택)"
+                        placeholder={locked ? "" : "메모 (선택)"}
                         className="h-8 text-xs w-full"
+                        disabled={locked || rowSaving}
                       />
                     </td>
-                    <td className="px-2 py-2 text-center">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => setDeleteTarget(item)}
-                      >
-                        <Trash2 className="h-4 w-4 text-muted-foreground/50 hover:text-destructive transition-colors" />
-                      </Button>
+                    <td className="px-2 py-2">
+                      <div className="flex items-center justify-end gap-1">
+                        {locked && (
+                          <Button variant="outline" size="sm" className="h-8 gap-1 px-2.5 text-xs" onClick={() => startEdit(item)}>
+                            <Pencil className="h-3.5 w-3.5" />수정
+                          </Button>
+                        )}
+                        {editing && dirty && (
+                          <Button size="sm" className="h-8 px-2.5 text-xs" disabled={rowSaving} onClick={() => void saveEdit(item)}>
+                            {rowSaving ? "저장 중..." : "저장"}
+                          </Button>
+                        )}
+                        {editing && (
+                          <Button variant="outline" size="sm" className="h-8 px-2.5 text-xs" disabled={rowSaving} onClick={() => cancelEdit(item)}>
+                            취소
+                          </Button>
+                        )}
+                        {!editing && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setDeleteTarget(item)}
+                          >
+                            <Trash2 className="h-4 w-4 text-muted-foreground/50 hover:text-destructive transition-colors" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )
@@ -411,7 +589,7 @@ export function FixedExpenseView() {
           {items.length > 0 && !loading && (
             <tfoot>
               <tr className="border-t border-border bg-muted/40">
-                <td className="px-4 py-2.5 text-sm font-medium text-muted-foreground">합계</td>
+                <td colSpan={bulkMode ? 3 : 2} className="px-4 py-2.5 text-sm font-medium text-muted-foreground">합계</td>
                 <td />
                 <td className="px-4 py-2.5 text-sm font-semibold tabular-nums text-right">
                   ₩{totalAmount.toLocaleString("ko-KR")}
