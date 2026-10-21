@@ -21,6 +21,10 @@ import { FixedExpenseView } from "@/components/erp/fixed-expense-view"
 import { TaxProgressView } from "@/components/erp/tax-progress-view"
 import { TradingCorporationsView } from "@/components/erp/trading-corporations-view"
 import { InquiryView } from "@/components/erp/inquiry-view"
+import { fetchMe } from "@/lib/api"
+
+// 다른 곳에서 세션이 초기화(비밀번호 변경·세션 초기화)되면 이 주기 안에 로그아웃된다.
+const SESSION_CHECK_INTERVAL_MS = 60_000
 
 const validIds = new Set(menuItems.map((m) => m.id))
 
@@ -38,6 +42,19 @@ export function ErpLayout({ onLogout }: { onLogout: () => void }) {
   useEffect(() => {
     history.replaceState(null, "", `#${active}`)
   }, [active])
+
+  // 세션 유효성 주기 확인: 토큰이 무효화되면 401 → 전역 핸들러가 로그아웃 처리
+  useEffect(() => {
+    const check = () => { if (document.visibilityState === "visible") fetchMe().catch(() => {}) }
+    const timer = window.setInterval(check, SESSION_CHECK_INTERVAL_MS)
+    document.addEventListener("visibilitychange", check)
+    window.addEventListener("focus", check)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener("visibilitychange", check)
+      window.removeEventListener("focus", check)
+    }
+  }, [])
 
   useEffect(() => {
     document.title = `Freed | ${activeLabel}`

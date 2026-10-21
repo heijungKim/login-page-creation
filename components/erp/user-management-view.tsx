@@ -1,14 +1,14 @@
 ﻿"use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { Plus, Pencil, Trash2, ShieldCheck, ShieldOff, Eye, EyeOff, KeyRound } from "lucide-react"
+import { Plus, Pencil, Trash2, ShieldCheck, ShieldOff, Eye, EyeOff, KeyRound, LogOut } from "lucide-react"
 import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { api, ApiError } from "@/lib/api"
+import { api, ApiError, fetchMe } from "@/lib/api"
 import { ChangeHistory } from "@/components/erp/change-history"
 import { getAccessToken } from "@/lib/auth"
 
@@ -87,6 +87,33 @@ export function UserManagementView() {
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
   const myId = getCurrentAdminId()
+
+  // 슈퍼관리자 여부 (세션 초기화 버튼 노출, 비밀번호 변경 시 강제 로그아웃 안내)
+  const [isSuper, setIsSuper] = useState(false)
+  const [sessionTarget, setSessionTarget] = useState<AdminUser | null>(null)
+  const [sessionLoading, setSessionLoading] = useState(false)
+  const [sessionError, setSessionError] = useState("")
+  const [sessionDoneMsg, setSessionDoneMsg] = useState("")
+
+  useEffect(() => {
+    fetchMe().then((me) => setIsSuper(!!me.superAdmin)).catch(() => setIsSuper(false))
+  }, [])
+
+  async function handleResetSessions() {
+    if (!sessionTarget) return
+    setSessionLoading(true)
+    setSessionError("")
+    try {
+      await api.post(`/api/admins/${sessionTarget.id}/reset-sessions`)
+      setSessionDoneMsg(`${sessionTarget.displayName}(${sessionTarget.username}) 계정이 모든 기기에서 로그아웃되었습니다.`)
+      setTimeout(() => setSessionDoneMsg(""), 4000)
+      setSessionTarget(null)
+    } catch (e) {
+      setSessionError(e instanceof ApiError ? e.message : "세션 초기화에 실패했습니다.")
+    } finally {
+      setSessionLoading(false)
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -272,6 +299,10 @@ export function UserManagementView() {
         </div>
       </div>
 
+      {sessionDoneMsg && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{sessionDoneMsg}</div>
+      )}
+
       {loading ? (
         <div className="py-20 text-center text-sm text-muted-foreground">불러오는 중...</div>
       ) : error ? (
@@ -367,6 +398,17 @@ export function UserManagementView() {
                         >
                           <KeyRound className="h-4 w-4 text-muted-foreground" />
                         </Button>
+                        {isSuper && user.id !== myId && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="세션 초기화 (모든 기기 로그아웃)"
+                            onClick={() => { setSessionTarget(user); setSessionError("") }}
+                          >
+                            <LogOut className="h-4 w-4 text-orange-600" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -541,6 +583,7 @@ export function UserManagementView() {
                 </button>
               </div>
             </div>
+            {isSuper && editForm.password && <p className="text-xs text-orange-600">비밀번호를 변경하면 이 계정으로 접속된 모든 기기가 로그아웃됩니다.</p>}
             {editError && <p className="text-sm text-destructive">{editError}</p>}
             {editTarget && <ChangeHistory entityType="Admin" entityId={editTarget.id} refreshKey={JSON.stringify(editTarget)} />}
             <DialogFooter>
@@ -548,6 +591,26 @@ export function UserManagementView() {
               <Button type="submit" disabled={editLoading}>{editLoading ? "저장 중..." : "저장"}</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* 세션 초기화 확인 (슈퍼관리자 전용) */}
+      <Dialog open={!!sessionTarget} onOpenChange={(o) => { if (!o) setSessionTarget(null) }}>
+        <DialogContent className={`max-w-sm ${DIALOG_CENTER}`}>
+          <DialogHeader>
+            <DialogTitle>세션 초기화</DialogTitle>
+          </DialogHeader>
+          <p className="py-2 text-sm text-muted-foreground">
+            <span className="font-semibold text-foreground">{sessionTarget?.displayName}</span> ({sessionTarget?.username}) 계정으로
+            접속된 모든 기기가 로그아웃됩니다.<br />해당 사용자는 다시 로그인해야 합니다.
+          </p>
+          {sessionError && <p className="text-sm text-destructive">{sessionError}</p>}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSessionTarget(null)}>취소</Button>
+            <Button variant="destructive" disabled={sessionLoading} onClick={() => void handleResetSessions()}>
+              {sessionLoading ? "처리 중..." : "모든 기기 로그아웃"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -598,6 +661,7 @@ export function UserManagementView() {
                 </button>
               </div>
             </div>
+            {isSuper && <p className="text-xs text-orange-600">비밀번호를 변경하면 이 계정으로 접속된 모든 기기가 로그아웃됩니다.</p>}
             {resetError && <p className="text-sm text-destructive">{resetError}</p>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setResetTarget(null)}>취소</Button>

@@ -138,6 +138,7 @@ const FIELD_LABELS: Record<string, string> = {
   displayName: "이름",
   passwordHash: "비밀번호",
   enabled: "활성화",
+  tokenVersion: "세션 초기화(버전)",
   company: "회사명",
   service: "서비스",
   message: "문의 내용",

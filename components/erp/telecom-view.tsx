@@ -323,6 +323,18 @@ export function TelecomView() {
     setEditMode(true)
   }
 
+  // 수정 폼이 원래 값과 달라졌는지
+  const editDirty = !!detail && (
+    editForm.owner !== detail.owner ||
+    editForm.phone !== detail.phone ||
+    editForm.carrier !== detail.carrier ||
+    (Number(editForm.cost.replace(/,/g, "")) || 0) !== Math.round(Number(detail.cost) || 0) ||
+    editForm.paymentDay !== detail.paymentDay ||
+    editForm.bankName !== detail.bankName ||
+    editForm.accountNo !== detail.accountNo ||
+    editForm.memo !== detail.memo
+  )
+
   async function handleEdit() {
     if (!detail) return
     setEditSubmitting(true)
@@ -725,6 +737,7 @@ export function TelecomView() {
                   </div>
                   )}
 
+                  {!editMode && (
                   <div className="rounded-lg border border-border p-4">
                     <div className="mb-3">
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -734,12 +747,12 @@ export function TelecomView() {
 
                     <div className="mb-4 flex items-end gap-2">
                       <div className="flex flex-col gap-1">
-                        <Label className="text-xs text-muted-foreground">납입일</Label>
+                        <Label className="text-xs text-muted-foreground">납입일 (납입 기록용)</Label>
                         <Input type="date" value={payForm.paidDate} onChange={(e) => setPayForm((p) => ({ ...p, paidDate: e.target.value }))} className="h-9 w-36 text-sm" />
                       </div>
                       <div className="flex flex-col gap-1">
-                        <Label className="text-xs text-muted-foreground">금액</Label>
-                        <Input value={payForm.paidAmount} onChange={(e) => setPayForm((p) => ({ ...p, paidAmount: toCommaNumber(e.target.value) }))} placeholder="금액" className="h-9 w-32 text-sm" />
+                        <Label className="text-xs text-muted-foreground">납입 금액</Label>
+                        <Input value={payForm.paidAmount} onChange={(e) => setPayForm((p) => ({ ...p, paidAmount: toCommaNumber(e.target.value) }))} placeholder="납입 금액" className="h-9 w-32 text-sm" />
                       </div>
                       <div className="flex flex-1 flex-col gap-1">
                         <Label className="text-xs text-muted-foreground">메모</Label>
@@ -783,6 +796,7 @@ export function TelecomView() {
                       </div>
                     )}
                   </div>
+                  )}
                   <ChangeHistory entityType="Telecom" entityId={detail.id} refreshKey={`${JSON.stringify(detail)}|${payments.map((p) => p.id).join(",")}`} />
                 </div>
               </div>
@@ -790,7 +804,8 @@ export function TelecomView() {
                 {editMode ? (
                   <>
                     <Button variant="outline" disabled={editSubmitting} onClick={() => { setEditMode(false); setEditError(null) }}>취소</Button>
-                    <Button disabled={editSubmitting} onClick={handleEdit}>
+                    {!editDirty && <span className="mr-auto self-center text-xs text-muted-foreground">변경된 내용이 없습니다.</span>}
+                    <Button disabled={editSubmitting || !editDirty} onClick={handleEdit}>
                       {editSubmitting ? "저장 중..." : "저장"}
                     </Button>
                   </>
