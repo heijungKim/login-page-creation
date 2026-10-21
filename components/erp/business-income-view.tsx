@@ -24,6 +24,7 @@ type PaymentEntry = {
   localTax: number
   memo: string
   status: string
+  paidDate: string | null
 }
 
 type IncomeEntry = {
@@ -290,9 +291,9 @@ export function BusinessIncomeView() {
   const [open, setOpen] = useState(false)
   const [detail, setDetail] = useState<IncomeEntry | null>(null)
   const [detailForm, setDetailForm] = useState<FormData>(emptyForm)
-  const [paymentForm, setPaymentForm] = useState({ payDate: getTodayDate(), revenue: "", reportType: "미신고", memo: "", status: "지급 완료" })
+  const [paymentForm, setPaymentForm] = useState({ payDate: getTodayDate(), revenue: "", reportType: "미신고", memo: "", status: "지급 완료", paidDate: getTodayDate() })
   const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null)
-  const [editingPaymentForm, setEditingPaymentForm] = useState({ payDate: "", revenue: "", reportType: "미신고", memo: "", status: "지급 완료" })
+  const [editingPaymentForm, setEditingPaymentForm] = useState({ payDate: "", revenue: "", reportType: "미신고", memo: "", status: "지급 완료", paidDate: "" })
   // 소득자 탭: "all" 이면 전체, 아니면 소득자명
   const [activeTab, setActiveTab] = useState<string>("all")
   const [editMode, setEditMode] = useState(false)
@@ -433,7 +434,7 @@ export function BusinessIncomeView() {
       commission: row.commission.toString(), payment: row.payment.toLocaleString("ko-KR"),
       memo: row.memo, reportType: row.reportType, payDate: getTodayDate(),
     })
-    setPaymentForm({ payDate: getTodayDate(), revenue: "", reportType: row.reportType, memo: "", status: "지급 완료" })
+    setPaymentForm({ payDate: getTodayDate(), revenue: "", reportType: row.reportType, memo: "", status: "지급 완료", paidDate: getTodayDate() })
     setEditingPaymentId(null)
     setEditMode(false)
     setSubmitError(null)
@@ -509,8 +510,9 @@ export function BusinessIncomeView() {
       await api.post(`/api/business-incomes/${detail.id}/payments`, {
         payDate: paymentForm.payDate, revenue: payRevenue, commission: payCommissionRate,
         amount, reportType: paymentForm.reportType, memo: paymentForm.memo, status: paymentForm.status,
+        paidDate: paymentForm.status === "지급 완료" ? (paymentForm.paidDate || null) : null,
       })
-      setPaymentForm({ payDate: getTodayDate(), revenue: "", reportType: detail.reportType, memo: "", status: "지급 완료" })
+      setPaymentForm({ payDate: getTodayDate(), revenue: "", reportType: detail.reportType, memo: "", status: "지급 완료", paidDate: getTodayDate() })
       await refreshDetail(detail.id)
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : "지급 내역 추가에 실패했습니다.")
@@ -534,12 +536,12 @@ export function BusinessIncomeView() {
 
   function handleEditPaymentEntry(p: PaymentEntry) {
     setEditingPaymentId(p.id)
-    setEditingPaymentForm({ payDate: p.payDate, revenue: p.revenue.toLocaleString("ko-KR"), reportType: p.reportType, memo: p.memo, status: p.status || "지급 완료" })
+    setEditingPaymentForm({ payDate: p.payDate, revenue: p.revenue.toLocaleString("ko-KR"), reportType: p.reportType, memo: p.memo, status: p.status || "지급 완료", paidDate: p.paidDate ?? "" })
   }
 
   function handleCancelEditPayment() {
     setEditingPaymentId(null)
-    setEditingPaymentForm({ payDate: "", revenue: "", reportType: detail?.reportType ?? "미신고", memo: "", status: "지급 완료" })
+    setEditingPaymentForm({ payDate: "", revenue: "", reportType: detail?.reportType ?? "미신고", memo: "", status: "지급 완료", paidDate: "" })
   }
 
   async function handleSavePaymentEntry(id: number) {
@@ -554,6 +556,7 @@ export function BusinessIncomeView() {
       await api.put(`/api/business-incomes/${detail.id}/payments/${id}`, {
         payDate: editingPaymentForm.payDate, revenue, amount,
         reportType: editingPaymentForm.reportType, memo: editingPaymentForm.memo, status: editingPaymentForm.status,
+        paidDate: editingPaymentForm.status === "지급 완료" ? (editingPaymentForm.paidDate || null) : null,
       })
       setEditingPaymentId(null)
       await refreshDetail(detail.id)
@@ -569,13 +572,29 @@ export function BusinessIncomeView() {
     if (!detail || p.status === status) return
     setSubmitError(null)
     try {
+      // 지급 완료로 바꾸면 서버가 오늘 날짜를 지급 완료일로 넣는다 (예정으로 바꾸면 비움)
       await api.put(`/api/business-incomes/${detail.id}/payments/${p.id}`, {
         payDate: p.payDate, revenue: p.revenue, amount: p.amount,
-        reportType: p.reportType, memo: p.memo, status,
+        reportType: p.reportType, memo: p.memo, status, paidDate: null,
       })
       await refreshDetail(detail.id)
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : "지급 상태 변경에 실패했습니다.")
+    }
+  }
+
+  // 지급 완료일 수동 변경
+  async function handleChangePaidDate(p: PaymentEntry, paidDate: string) {
+    if (!detail || !paidDate || p.paidDate === paidDate) return
+    setSubmitError(null)
+    try {
+      await api.put(`/api/business-incomes/${detail.id}/payments/${p.id}`, {
+        payDate: p.payDate, revenue: p.revenue, amount: p.amount,
+        reportType: p.reportType, memo: p.memo, status: p.status, paidDate,
+      })
+      await refreshDetail(detail.id)
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "지급 완료일 변경에 실패했습니다.")
     }
   }
 
@@ -988,6 +1007,7 @@ export function BusinessIncomeView() {
                     <thead>
                       <tr className="border-b border-border/60 bg-muted/30 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         <th className="px-3 py-2.5 text-left whitespace-nowrap">일자</th>
+                        <th className="px-3 py-2.5 text-left whitespace-nowrap">지급 완료일</th>
                         <th className="px-3 py-2.5 text-center whitespace-nowrap">상태</th>
                         <th className="px-3 py-2.5 text-right whitespace-nowrap">매출총액</th>
                         <th className="px-3 py-2.5 text-center whitespace-nowrap">수수료율</th>
@@ -1015,6 +1035,27 @@ export function BusinessIncomeView() {
                                 <Input value={editingPaymentForm.payDate} type="date" onChange={(e) => setEditingPaymentField("payDate", e.target.value)} className="h-8 w-36 text-xs" />
                               ) : (
                                 <span className="text-foreground">{item.payDate}</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              {isEditing ? (
+                                <Input
+                                  value={editingPaymentForm.paidDate}
+                                  type="date"
+                                  disabled={editingPaymentForm.status !== "지급 완료"}
+                                  onChange={(e) => setEditingPaymentField("paidDate", e.target.value)}
+                                  className="h-8 w-36 text-xs"
+                                />
+                              ) : item.status === "지급 완료" ? (
+                                <Input
+                                  aria-label="지급 완료일"
+                                  type="date"
+                                  value={item.paidDate ?? ""}
+                                  onChange={(e) => void handleChangePaidDate(item, e.target.value)}
+                                  className="h-8 w-36 border-transparent bg-transparent px-1.5 text-xs shadow-none hover:border-input focus:border-input"
+                                />
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
                               )}
                             </td>
                             <td className="px-3 py-2 text-center whitespace-nowrap">
@@ -1095,7 +1136,7 @@ export function BusinessIncomeView() {
                       })}
                       {filteredPayments.length === 0 && (
                         <tr>
-                          <td colSpan={12} className="py-10 text-center text-sm text-muted-foreground">
+                          <td colSpan={13} className="py-10 text-center text-sm text-muted-foreground">
                             {(paymentFrom || paymentTo) ? "해당 기간의 지급 내역이 없습니다." : "등록된 지급 내역이 없습니다."}
                           </td>
                         </tr>
@@ -1104,6 +1145,7 @@ export function BusinessIncomeView() {
                     <tfoot>
                       <tr className="border-t-2 border-border bg-muted/40 font-semibold text-sm">
                         <td className="px-3 pt-3 pb-2.5">{(paymentFrom || paymentTo) ? "기간 합계" : "합계"}</td>
+                        <td />
                         <td className="px-3 pt-3 pb-2.5 text-center text-xs font-normal text-amber-700 whitespace-nowrap">{filteredScheduledActual > 0 ? `예정 ${fmt(filteredScheduledActual)}` : "-"}</td>
                         <td className="px-3 pt-3 pb-2.5 text-center text-muted-foreground">-</td>
                         <td className="px-3 pt-3 pb-2.5 text-center text-muted-foreground">-</td>
@@ -1201,7 +1243,18 @@ export function BusinessIncomeView() {
                         {PAYMENT_STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                       </select>
                     </div>
-                    <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-5">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="payment-paid-date" className="text-xs font-medium text-muted-foreground">지급 완료일</Label>
+                      <Input
+                        id="payment-paid-date"
+                        type="date"
+                        value={paymentForm.status === "지급 완료" ? paymentForm.paidDate : ""}
+                        disabled={paymentForm.status !== "지급 완료"}
+                        onChange={(e) => setPaymentField("paidDate", e.target.value)}
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-4">
                       <Label htmlFor="payment-memo" className="text-xs font-medium text-muted-foreground">메모</Label>
                       <Input id="payment-memo" value={paymentForm.memo} onChange={(e) => setPaymentField("memo", e.target.value)} placeholder="내용 (선택)" className="h-9" />
                     </div>
