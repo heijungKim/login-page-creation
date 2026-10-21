@@ -186,18 +186,6 @@ function ReportBadge({ type }: { type: string }) {
 
 const PAYMENT_STATUS_OPTIONS = ["지급 완료", "지급 예정"] as const
 
-function PaymentStatusBadge({ status }: { status: string }) {
-  const done = status !== "지급 예정"
-  return (
-    <span className={cn(
-      "inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium",
-      done ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700",
-    )}>
-      {done ? "지급 완료" : "지급 예정"}
-    </span>
-  )
-}
-
 function StatCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: "blue" | "red" | "green" }) {
   return (
     <div className={cn(
@@ -355,37 +343,42 @@ export function BusinessIncomeView() {
       .sort((a, b) => (b.registeredAt ?? "").localeCompare(a.registeredAt ?? "")),
     [rows, filters])
 
-  // 소득자명 탭 목록 (가나다순)
-  const incomeNames = useMemo(
-    () => [...new Set(rows.map((r) => r.name.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko")),
-    [rows],
-  )
+  // 소득자 탭 목록 (소득자 한 명당 탭 하나, 가나다순, 동명이인은 주민번호 앞자리로 구분)
+  const incomeTabs = useMemo(() => {
+    const sorted = [...rows].sort((a, b) => a.name.localeCompare(b.name, "ko") || a.id - b.id)
+    const nameCount = new Map<string, number>()
+    for (const r of sorted) nameCount.set(r.name.trim(), (nameCount.get(r.name.trim()) ?? 0) + 1)
+    return sorted.map((r) => ({
+      key: String(r.id),
+      label: (nameCount.get(r.name.trim()) ?? 0) > 1 ? `${r.name} (${r.regNo.slice(0, 6)})` : r.name,
+      row: r,
+    }))
+  }, [rows])
+
+  function selectTab(key: string) {
+    setActiveTab(key)
+    setSelectedIds(new Set())
+    if (key === "all") { setDetail(null); return }
+    const row = rows.find((r) => String(r.id) === key)
+    if (row) openDetailView(row)
+  }
+
+  // 삭제 등으로 선택한 소득자가 사라지면 전체 탭으로
   useEffect(() => {
-    if (activeTab !== "all" && !incomeNames.includes(activeTab)) setActiveTab("all")
-  }, [incomeNames, activeTab])
-
-  const tabRows = useMemo(
-    () => (activeTab === "all" ? filteredRows : filteredRows.filter((r) => r.name.trim() === activeTab)),
-    [filteredRows, activeTab],
-  )
-
-  // 선택한 소득자의 지급 내역 (최신순)
-  const tabPayments = useMemo(() => {
-    if (activeTab === "all") return []
-    return rows
-      .filter((r) => r.name.trim() === activeTab)
-      .flatMap((r) => r.payments.map((p) => ({ ...p, incomeId: r.id })))
-      .sort((a, b) => b.payDate.localeCompare(a.payDate) || b.id - a.id)
+    if (activeTab !== "all" && !rows.some((r) => String(r.id) === activeTab)) { setActiveTab("all"); setDetail(null) }
   }, [rows, activeTab])
 
-  const tabPaymentSummary = useMemo(() => tabPayments.reduce(
+  const tabRows = filteredRows
+
+  // 선택한 소득자의 지급 상태별 합계 (실 입금 기준)
+  const detailStatusSummary = useMemo(() => (detail?.payments ?? []).reduce(
     (acc, p) => {
       const actual = p.amount - p.incomeTax - p.localTax
       if (p.status === "지급 예정") { acc.scheduled += actual; acc.scheduledCount++ } else { acc.paid += actual; acc.paidCount++ }
       return acc
     },
     { paid: 0, paidCount: 0, scheduled: 0, scheduledCount: 0 },
-  ), [tabPayments])
+  ), [detail])
 
   async function refreshDetail(id: number) {
     try {
@@ -495,6 +488,7 @@ export function BusinessIncomeView() {
       await api.delete(`/api/business-incomes/${detail.id}`)
       setDetail(null)
       setEditMode(false)
+      setActiveTab("all")
       await refresh()
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : "삭제에 실패했습니다.")
@@ -567,6 +561,21 @@ export function BusinessIncomeView() {
       setSubmitError(err instanceof ApiError ? err.message : "지급 내역 수정에 실패했습니다.")
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  // 지급 내역 상태만 바로 변경 (나머지 값은 그대로 저장)
+  async function handleChangePaymentStatus(p: PaymentEntry, status: string) {
+    if (!detail || p.status === status) return
+    setSubmitError(null)
+    try {
+      await api.put(`/api/business-incomes/${detail.id}/payments/${p.id}`, {
+        payDate: p.payDate, revenue: p.revenue, amount: p.amount,
+        reportType: p.reportType, memo: p.memo, status,
+      })
+      await refreshDetail(detail.id)
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "지급 상태 변경에 실패했습니다.")
     }
   }
 
@@ -673,13 +682,13 @@ export function BusinessIncomeView() {
 
       {/* 소득자 탭 */}
       <div className="-mb-3 flex gap-1 overflow-x-auto border-b border-border pb-px" role="tablist" aria-label="소득자">
-        {[{ key: "all", label: "전체", count: rows.length }, ...incomeNames.map((n) => ({ key: n, label: n, count: rows.filter((r) => r.name.trim() === n).length }))].map((t) => (
+        {[{ key: "all", label: "전체", count: rows.length }, ...incomeTabs.map((t) => ({ key: t.key, label: t.label, count: 0 }))].map((t) => (
           <button
             key={t.key}
             type="button"
             role="tab"
             aria-selected={activeTab === t.key}
-            onClick={() => { setActiveTab(t.key); setSelectedIds(new Set()) }}
+            onClick={() => selectTab(t.key)}
             className={cn(
               "shrink-0 whitespace-nowrap rounded-t-md border border-b-0 px-3.5 py-2 text-sm transition-colors",
               activeTab === t.key
@@ -689,12 +698,12 @@ export function BusinessIncomeView() {
           >
             {t.label}
             {t.key === "all" && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{t.count}</span>}
-            {t.key !== "all" && t.count > 1 && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{t.count}</span>}
           </button>
         ))}
       </div>
 
-      {/* 목록 테이블 */}
+      {/* 목록 테이블 (전체 탭) */}
+      {activeTab === "all" && (
       <Card className="overflow-hidden py-0 shadow-sm">
         <CardContent className="p-0">
           <div className={cn("max-h-[calc(100svh-14rem)] overflow-auto", activeTab === "all" && "min-h-80")}>
@@ -754,7 +763,7 @@ export function BusinessIncomeView() {
                         "group cursor-pointer transition-colors hover:bg-blue-50/50",
                         rowIdx % 2 === 1 && "bg-muted/20",
                       )}
-                      onClick={() => openDetailView(row)}
+                      onClick={() => selectTab(String(row.id))}
                     >
                       {bulkMode && (
                         <td className="w-10 px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
@@ -822,63 +831,6 @@ export function BusinessIncomeView() {
           </div>
         </CardContent>
       </Card>
-
-      {/* 선택한 소득자의 지급 내역 */}
-      {activeTab !== "all" && (
-        <Card className="overflow-hidden py-0 shadow-sm">
-          <CardContent className="p-0">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-              <p className="text-sm font-semibold text-foreground">
-                {activeTab} 지급 내역
-                <span className="ml-1.5 text-xs font-normal text-muted-foreground">{tabPayments.length}건</span>
-              </p>
-              <div className="flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
-                  지급 완료 {tabPaymentSummary.paidCount}건 · {fmt(tabPaymentSummary.paid)}
-                </span>
-                <span className="rounded-full bg-amber-50 px-2.5 py-1 font-medium text-amber-700">
-                  지급 예정 {tabPaymentSummary.scheduledCount}건 · {fmt(tabPaymentSummary.scheduled)}
-                </span>
-              </div>
-            </div>
-            <div className="max-h-[420px] overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-muted">
-                  <tr className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    <th className="px-3 py-2.5 text-left whitespace-nowrap">지급일</th>
-                    <th className="px-3 py-2.5 text-center whitespace-nowrap">상태</th>
-                    <th className="px-3 py-2.5 text-right whitespace-nowrap">매출총액</th>
-                    <th className="px-3 py-2.5 text-right whitespace-nowrap">지급총액</th>
-                    <th className="px-3 py-2.5 text-center whitespace-nowrap">신고</th>
-                    <th className="px-3 py-2.5 text-right whitespace-nowrap">원천징수</th>
-                    <th className="px-3 py-2.5 text-right whitespace-nowrap font-bold text-blue-600">실 입금</th>
-                    <th className="px-3 py-2.5 text-left whitespace-nowrap">메모</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/40">
-                  {tabPayments.length === 0 ? (
-                    <tr><td colSpan={8} className="py-10 text-center text-sm text-muted-foreground">등록된 지급 내역이 없습니다.</td></tr>
-                  ) : tabPayments.map((p) => {
-                    const withholding = p.incomeTax + p.localTax
-                    const owner = rows.find((r) => r.id === p.incomeId)
-                    return (
-                      <tr key={p.id} className="cursor-pointer hover:bg-blue-50/50" onClick={() => owner && openDetailView(owner)}>
-                        <td className="px-3 py-2 whitespace-nowrap">{p.payDate}</td>
-                        <td className="px-3 py-2 text-center"><PaymentStatusBadge status={p.status} /></td>
-                        <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{p.revenue > 0 ? fmt(p.revenue) : "-"}</td>
-                        <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{fmt(p.amount)}</td>
-                        <td className="px-3 py-2 text-center"><ReportBadge type={p.reportType} /></td>
-                        <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap text-red-600">{withholding > 0 ? fmt(withholding) : "-"}</td>
-                        <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap font-bold text-blue-600">{fmt(p.amount - withholding)}</td>
-                        <td className="px-3 py-2 text-muted-foreground">{p.memo || "-"}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
       )}
 
       {/* 일괄 삭제 확인 다이얼로그 */}
@@ -898,20 +850,30 @@ export function BusinessIncomeView() {
         </DialogContent>
       </Dialog>
 
-      {/* 상세 팝업 */}
-      <Dialog open={!!detail} onOpenChange={(o) => { if (!o) { setDetail(null); setEditMode(false); setEditingPaymentId(null); setSubmitError(null) } }}>
-        <DialogContent className="sm:w-[90vw] sm:max-w-[90vw] md:w-[85vw] md:max-w-[85vw] lg:w-[78vw] lg:max-w-[78vw] overflow-x-hidden p-0">
-          <DialogHeader className="px-6 pt-5 pb-4 border-b border-border bg-muted/30">
+      {/* 소득자 관리 (소득자 탭 선택 시) */}
+      {activeTab !== "all" && detail && (
+      <Card className="overflow-hidden py-0 shadow-sm">
+        <CardContent className="p-0">
+          <div className="px-6 pt-5 pb-4 border-b border-border bg-muted/30">
             <div className="flex items-start justify-between">
               <div>
-                <DialogTitle className="text-lg font-bold">{detail?.name}</DialogTitle>
+                <h3 className="text-lg font-bold">{detail.name}</h3>
                 <p className="mt-0.5 text-sm text-muted-foreground">{detail?.regNo} · 등록일 {detail?.registeredAt}</p>
               </div>
               <div className="flex items-center gap-2 mt-0.5">
-                {detail && <ReportBadge type={detail.reportType} />}
+                <ReportBadge type={detail.reportType} />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                  onClick={handleDeleteIncome}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  소득자 삭제
+                </Button>
               </div>
             </div>
-          </DialogHeader>
+          </div>
 
           {detail && (
             <div className="flex flex-col gap-5 px-6 py-5">
@@ -925,6 +887,14 @@ export function BusinessIncomeView() {
                 <StatCard label="총 지급액" value={fmt(detail.payment)} sub={`수수료 ${detail.commission}%`} />
                 <StatCard label="원천징수 합계" value={fmt(detail.totalIncomeTax + detail.totalLocalTax)} accent="red" />
                 <StatCard label="실 입금액" value={fmt(detail.actualPayment)} accent="blue" />
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
+                  지급 완료 {detailStatusSummary.paidCount}건 · {fmt(detailStatusSummary.paid)}
+                </span>
+                <span className="rounded-full bg-amber-50 px-2.5 py-1 font-medium text-amber-700">
+                  지급 예정 {detailStatusSummary.scheduledCount}건 · {fmt(detailStatusSummary.scheduled)}
+                </span>
               </div>
 
               {/* 기본 정보 */}
@@ -1052,7 +1022,21 @@ export function BusinessIncomeView() {
                                 <select value={editingPaymentForm.status} onChange={(e) => setEditingPaymentField("status", e.target.value)} className="h-8 rounded-md border border-input bg-background px-2 text-xs">
                                   {PAYMENT_STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                                 </select>
-                              ) : <PaymentStatusBadge status={item.status} />}
+                              ) : (
+                                <select
+                                  aria-label="지급 상태"
+                                  value={item.status || "지급 완료"}
+                                  onChange={(e) => void handleChangePaymentStatus(item, e.target.value)}
+                                  className={cn(
+                                    "h-7 cursor-pointer rounded-full border px-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-ring",
+                                    item.status === "지급 예정"
+                                      ? "border-amber-200 bg-amber-100 text-amber-700"
+                                      : "border-emerald-200 bg-emerald-100 text-emerald-700",
+                                  )}
+                                >
+                                  {PAYMENT_STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                                </select>
+                              )}
                             </td>
                             <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
                               {isEditing ? (
@@ -1229,20 +1213,9 @@ export function BusinessIncomeView() {
             </div>
           )}
 
-          <DialogFooter className="px-6 pt-5 pb-8 border-t border-border bg-muted/20 flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1 gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-              onClick={handleDeleteIncome}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              삭제
-            </Button>
-            <Button variant="outline" size="sm" className="flex-1" onClick={() => { setDetail(null); setEditMode(false); setEditingPaymentId(null) }}>닫기</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </CardContent>
+      </Card>
+      )}
 
       {/* 소득 등록 다이얼로그 */}
       <Dialog open={open} onOpenChange={setOpen}>
