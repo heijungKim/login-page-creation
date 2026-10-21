@@ -23,6 +23,7 @@ type PaymentEntry = {
   incomeTax: number
   localTax: number
   memo: string
+  status: string
 }
 
 type IncomeEntry = {
@@ -183,6 +184,20 @@ function ReportBadge({ type }: { type: string }) {
   )
 }
 
+const PAYMENT_STATUS_OPTIONS = ["지급 완료", "지급 예정"] as const
+
+function PaymentStatusBadge({ status }: { status: string }) {
+  const done = status !== "지급 예정"
+  return (
+    <span className={cn(
+      "inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium",
+      done ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700",
+    )}>
+      {done ? "지급 완료" : "지급 예정"}
+    </span>
+  )
+}
+
 function StatCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: "blue" | "red" | "green" }) {
   return (
     <div className={cn(
@@ -287,9 +302,11 @@ export function BusinessIncomeView() {
   const [open, setOpen] = useState(false)
   const [detail, setDetail] = useState<IncomeEntry | null>(null)
   const [detailForm, setDetailForm] = useState<FormData>(emptyForm)
-  const [paymentForm, setPaymentForm] = useState({ payDate: getTodayDate(), revenue: "", reportType: "미신고", memo: "" })
+  const [paymentForm, setPaymentForm] = useState({ payDate: getTodayDate(), revenue: "", reportType: "미신고", memo: "", status: "지급 완료" })
   const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null)
-  const [editingPaymentForm, setEditingPaymentForm] = useState({ payDate: "", revenue: "", reportType: "미신고", memo: "" })
+  const [editingPaymentForm, setEditingPaymentForm] = useState({ payDate: "", revenue: "", reportType: "미신고", memo: "", status: "지급 완료" })
+  // 소득자 탭: "all" 이면 전체, 아니면 소득자명
+  const [activeTab, setActiveTab] = useState<string>("all")
   const [editMode, setEditMode] = useState(false)
   const [form, setForm] = useState<FormData>(emptyForm)
   const [filters, setFilters] = useState<Record<string, string>>({})
@@ -337,6 +354,38 @@ export function BusinessIncomeView() {
       )
       .sort((a, b) => (b.registeredAt ?? "").localeCompare(a.registeredAt ?? "")),
     [rows, filters])
+
+  // 소득자명 탭 목록 (가나다순)
+  const incomeNames = useMemo(
+    () => [...new Set(rows.map((r) => r.name.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko")),
+    [rows],
+  )
+  useEffect(() => {
+    if (activeTab !== "all" && !incomeNames.includes(activeTab)) setActiveTab("all")
+  }, [incomeNames, activeTab])
+
+  const tabRows = useMemo(
+    () => (activeTab === "all" ? filteredRows : filteredRows.filter((r) => r.name.trim() === activeTab)),
+    [filteredRows, activeTab],
+  )
+
+  // 선택한 소득자의 지급 내역 (최신순)
+  const tabPayments = useMemo(() => {
+    if (activeTab === "all") return []
+    return rows
+      .filter((r) => r.name.trim() === activeTab)
+      .flatMap((r) => r.payments.map((p) => ({ ...p, incomeId: r.id })))
+      .sort((a, b) => b.payDate.localeCompare(a.payDate) || b.id - a.id)
+  }, [rows, activeTab])
+
+  const tabPaymentSummary = useMemo(() => tabPayments.reduce(
+    (acc, p) => {
+      const actual = p.amount - p.incomeTax - p.localTax
+      if (p.status === "지급 예정") { acc.scheduled += actual; acc.scheduledCount++ } else { acc.paid += actual; acc.paidCount++ }
+      return acc
+    },
+    { paid: 0, paidCount: 0, scheduled: 0, scheduledCount: 0 },
+  ), [tabPayments])
 
   async function refreshDetail(id: number) {
     try {
@@ -391,7 +440,7 @@ export function BusinessIncomeView() {
       commission: row.commission.toString(), payment: row.payment.toLocaleString("ko-KR"),
       memo: row.memo, reportType: row.reportType, payDate: getTodayDate(),
     })
-    setPaymentForm({ payDate: getTodayDate(), revenue: "", reportType: row.reportType, memo: "" })
+    setPaymentForm({ payDate: getTodayDate(), revenue: "", reportType: row.reportType, memo: "", status: "지급 완료" })
     setEditingPaymentId(null)
     setEditMode(false)
     setSubmitError(null)
@@ -465,9 +514,9 @@ export function BusinessIncomeView() {
     try {
       await api.post(`/api/business-incomes/${detail.id}/payments`, {
         payDate: paymentForm.payDate, revenue: payRevenue, commission: payCommissionRate,
-        amount, reportType: paymentForm.reportType, memo: paymentForm.memo,
+        amount, reportType: paymentForm.reportType, memo: paymentForm.memo, status: paymentForm.status,
       })
-      setPaymentForm({ payDate: getTodayDate(), revenue: "", reportType: detail.reportType, memo: "" })
+      setPaymentForm({ payDate: getTodayDate(), revenue: "", reportType: detail.reportType, memo: "", status: "지급 완료" })
       await refreshDetail(detail.id)
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : "지급 내역 추가에 실패했습니다.")
@@ -491,12 +540,12 @@ export function BusinessIncomeView() {
 
   function handleEditPaymentEntry(p: PaymentEntry) {
     setEditingPaymentId(p.id)
-    setEditingPaymentForm({ payDate: p.payDate, revenue: p.revenue.toLocaleString("ko-KR"), reportType: p.reportType, memo: p.memo })
+    setEditingPaymentForm({ payDate: p.payDate, revenue: p.revenue.toLocaleString("ko-KR"), reportType: p.reportType, memo: p.memo, status: p.status || "지급 완료" })
   }
 
   function handleCancelEditPayment() {
     setEditingPaymentId(null)
-    setEditingPaymentForm({ payDate: "", revenue: "", reportType: detail?.reportType ?? "미신고", memo: "" })
+    setEditingPaymentForm({ payDate: "", revenue: "", reportType: detail?.reportType ?? "미신고", memo: "", status: "지급 완료" })
   }
 
   async function handleSavePaymentEntry(id: number) {
@@ -510,7 +559,7 @@ export function BusinessIncomeView() {
     try {
       await api.put(`/api/business-incomes/${detail.id}/payments/${id}`, {
         payDate: editingPaymentForm.payDate, revenue, amount,
-        reportType: editingPaymentForm.reportType, memo: editingPaymentForm.memo,
+        reportType: editingPaymentForm.reportType, memo: editingPaymentForm.memo, status: editingPaymentForm.status,
       })
       setEditingPaymentId(null)
       await refreshDetail(detail.id)
@@ -539,6 +588,11 @@ export function BusinessIncomeView() {
     { payment: 0, incomeTax: 0, localTax: 0, actual: 0 }
   ), [filteredPayments])
 
+  const filteredScheduledActual = useMemo(
+    () => filteredPayments.filter((p) => p.status === "지급 예정").reduce((s, p) => s + (p.amount - p.incomeTax - p.localTax), 0),
+    [filteredPayments],
+  )
+
   const formRevenue = Number(form.revenue.replace(/,/g, "")) || 0
   const formCommissionRate = parseFloat(form.commission) || 0
   const formPayment = Math.floor(formRevenue * formCommissionRate / 100)
@@ -556,7 +610,7 @@ export function BusinessIncomeView() {
         <div className="flex flex-col gap-0.5">
           <h2 className="mobile-hidden text-xl font-bold tracking-tight text-foreground">사업소득</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {loading ? "불러오는 중..." : `전체 ${rows.length}건 · 표시 ${filteredRows.length}건`}
+            {loading ? "불러오는 중..." : `전체 ${rows.length}건 · 표시 ${tabRows.length}건`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -617,10 +671,33 @@ export function BusinessIncomeView() {
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">{error}</div>
       )}
 
+      {/* 소득자 탭 */}
+      <div className="-mb-3 flex gap-1 overflow-x-auto border-b border-border pb-px" role="tablist" aria-label="소득자">
+        {[{ key: "all", label: "전체", count: rows.length }, ...incomeNames.map((n) => ({ key: n, label: n, count: rows.filter((r) => r.name.trim() === n).length }))].map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === t.key}
+            onClick={() => { setActiveTab(t.key); setSelectedIds(new Set()) }}
+            className={cn(
+              "shrink-0 whitespace-nowrap rounded-t-md border border-b-0 px-3.5 py-2 text-sm transition-colors",
+              activeTab === t.key
+                ? "border-border bg-card font-semibold text-foreground"
+                : "border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+            )}
+          >
+            {t.label}
+            {t.key === "all" && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{t.count}</span>}
+            {t.key !== "all" && t.count > 1 && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{t.count}</span>}
+          </button>
+        ))}
+      </div>
+
       {/* 목록 테이블 */}
       <Card className="overflow-hidden py-0 shadow-sm">
         <CardContent className="p-0">
-          <div className="min-h-80 max-h-[calc(100svh-14rem)] overflow-auto">
+          <div className={cn("max-h-[calc(100svh-14rem)] overflow-auto", activeTab === "all" && "min-h-80")}>
             <table className="w-full border-collapse text-sm">
               <thead className="sticky top-0 z-20 bg-muted">
                 {/* 컬럼 레이블 */}
@@ -629,8 +706,8 @@ export function BusinessIncomeView() {
                     <th className="w-10 px-3 py-2.5 border-b border-border bg-muted" rowSpan={2}>
                       <input type="checkbox"
                         className="h-4 w-4 rounded border-border"
-                        checked={selectedIds.size === filteredRows.length && filteredRows.length > 0}
-                        onChange={(e) => setSelectedIds(e.target.checked ? new Set(filteredRows.map((r) => r.id)) : new Set())}
+                        checked={selectedIds.size === tabRows.length && tabRows.length > 0}
+                        onChange={(e) => setSelectedIds(e.target.checked ? new Set(tabRows.map((r) => r.id)) : new Set())}
                       />
                     </th>
                   )}
@@ -663,14 +740,14 @@ export function BusinessIncomeView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
-                {filteredRows.length === 0 ? (
+                {tabRows.length === 0 ? (
                   <tr>
                     <td colSpan={columns.length} className="h-48 text-center text-sm text-muted-foreground">
                       {loading ? "불러오는 중..." : "데이터가 없습니다."}
                     </td>
                   </tr>
                 ) : (
-                  filteredRows.map((row, rowIdx) => (
+                  tabRows.map((row, rowIdx) => (
                     <tr
                       key={row.id}
                       className={cn(
@@ -729,13 +806,13 @@ export function BusinessIncomeView() {
                   ))
                 )}
               </tbody>
-              {filteredRows.length > 0 && (
+              {tabRows.length > 0 && (
                 <tfoot>
                   <tr className="border-t-2 border-border bg-muted/60">
                     <td colSpan={columns.length} className="px-3 py-2.5 text-right">
                       <span className="text-xs font-medium text-muted-foreground">실 지급액 합계</span>
                       <span className="ml-3 text-sm font-bold tabular-nums text-blue-600">
-                        {fmt(filteredRows.reduce((s, r) => s + r.actualPayment, 0))}
+                        {fmt(tabRows.reduce((s, r) => s + r.actualPayment, 0))}
                       </span>
                     </td>
                   </tr>
@@ -745,6 +822,64 @@ export function BusinessIncomeView() {
           </div>
         </CardContent>
       </Card>
+
+      {/* 선택한 소득자의 지급 내역 */}
+      {activeTab !== "all" && (
+        <Card className="overflow-hidden py-0 shadow-sm">
+          <CardContent className="p-0">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+              <p className="text-sm font-semibold text-foreground">
+                {activeTab} 지급 내역
+                <span className="ml-1.5 text-xs font-normal text-muted-foreground">{tabPayments.length}건</span>
+              </p>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
+                  지급 완료 {tabPaymentSummary.paidCount}건 · {fmt(tabPaymentSummary.paid)}
+                </span>
+                <span className="rounded-full bg-amber-50 px-2.5 py-1 font-medium text-amber-700">
+                  지급 예정 {tabPaymentSummary.scheduledCount}건 · {fmt(tabPaymentSummary.scheduled)}
+                </span>
+              </div>
+            </div>
+            <div className="max-h-[420px] overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-muted">
+                  <tr className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <th className="px-3 py-2.5 text-left whitespace-nowrap">지급일</th>
+                    <th className="px-3 py-2.5 text-center whitespace-nowrap">상태</th>
+                    <th className="px-3 py-2.5 text-right whitespace-nowrap">매출총액</th>
+                    <th className="px-3 py-2.5 text-right whitespace-nowrap">지급총액</th>
+                    <th className="px-3 py-2.5 text-center whitespace-nowrap">신고</th>
+                    <th className="px-3 py-2.5 text-right whitespace-nowrap">원천징수</th>
+                    <th className="px-3 py-2.5 text-right whitespace-nowrap font-bold text-blue-600">실 입금</th>
+                    <th className="px-3 py-2.5 text-left whitespace-nowrap">메모</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {tabPayments.length === 0 ? (
+                    <tr><td colSpan={8} className="py-10 text-center text-sm text-muted-foreground">등록된 지급 내역이 없습니다.</td></tr>
+                  ) : tabPayments.map((p) => {
+                    const withholding = p.incomeTax + p.localTax
+                    const owner = rows.find((r) => r.id === p.incomeId)
+                    return (
+                      <tr key={p.id} className="cursor-pointer hover:bg-blue-50/50" onClick={() => owner && openDetailView(owner)}>
+                        <td className="px-3 py-2 whitespace-nowrap">{p.payDate}</td>
+                        <td className="px-3 py-2 text-center"><PaymentStatusBadge status={p.status} /></td>
+                        <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{p.revenue > 0 ? fmt(p.revenue) : "-"}</td>
+                        <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{fmt(p.amount)}</td>
+                        <td className="px-3 py-2 text-center"><ReportBadge type={p.reportType} /></td>
+                        <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap text-red-600">{withholding > 0 ? fmt(withholding) : "-"}</td>
+                        <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap font-bold text-blue-600">{fmt(p.amount - withholding)}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{p.memo || "-"}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 일괄 삭제 확인 다이얼로그 */}
       <Dialog open={bulkConfirm} onOpenChange={(o) => { if (!o) setBulkConfirm(false) }}>
@@ -883,6 +1018,7 @@ export function BusinessIncomeView() {
                     <thead>
                       <tr className="border-b border-border/60 bg-muted/30 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         <th className="px-3 py-2.5 text-left whitespace-nowrap">일자</th>
+                        <th className="px-3 py-2.5 text-center whitespace-nowrap">상태</th>
                         <th className="px-3 py-2.5 text-right whitespace-nowrap">매출총액</th>
                         <th className="px-3 py-2.5 text-center whitespace-nowrap">수수료율</th>
                         <th className="px-3 py-2.5 text-right whitespace-nowrap">지급총액</th>
@@ -910,6 +1046,13 @@ export function BusinessIncomeView() {
                               ) : (
                                 <span className="text-foreground">{item.payDate}</span>
                               )}
+                            </td>
+                            <td className="px-3 py-2 text-center whitespace-nowrap">
+                              {isEditing ? (
+                                <select value={editingPaymentForm.status} onChange={(e) => setEditingPaymentField("status", e.target.value)} className="h-8 rounded-md border border-input bg-background px-2 text-xs">
+                                  {PAYMENT_STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                                </select>
+                              ) : <PaymentStatusBadge status={item.status} />}
                             </td>
                             <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
                               {isEditing ? (
@@ -968,7 +1111,7 @@ export function BusinessIncomeView() {
                       })}
                       {filteredPayments.length === 0 && (
                         <tr>
-                          <td colSpan={11} className="py-10 text-center text-sm text-muted-foreground">
+                          <td colSpan={12} className="py-10 text-center text-sm text-muted-foreground">
                             {(paymentFrom || paymentTo) ? "해당 기간의 지급 내역이 없습니다." : "등록된 지급 내역이 없습니다."}
                           </td>
                         </tr>
@@ -977,6 +1120,7 @@ export function BusinessIncomeView() {
                     <tfoot>
                       <tr className="border-t-2 border-border bg-muted/40 font-semibold text-sm">
                         <td className="px-3 pt-3 pb-2.5">{(paymentFrom || paymentTo) ? "기간 합계" : "합계"}</td>
+                        <td className="px-3 pt-3 pb-2.5 text-center text-xs font-normal text-amber-700 whitespace-nowrap">{filteredScheduledActual > 0 ? `예정 ${fmt(filteredScheduledActual)}` : "-"}</td>
                         <td className="px-3 pt-3 pb-2.5 text-center text-muted-foreground">-</td>
                         <td className="px-3 pt-3 pb-2.5 text-center text-muted-foreground">-</td>
                         <td className="px-3 pt-3 pb-2.5 text-right tabular-nums">{fmt(filteredPaymentTotals.payment)}</td>
@@ -1062,7 +1206,18 @@ export function BusinessIncomeView() {
                       <Label className="text-xs opacity-0">추가</Label>
                       <Button className="h-9" disabled={submitting} onClick={handleAddPaymentEntry}>추가</Button>
                     </div>
-                    <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-6">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="payment-status" className="text-xs font-medium text-muted-foreground">지급 상태</Label>
+                      <select
+                        id="payment-status"
+                        value={paymentForm.status}
+                        onChange={(e) => setPaymentField("status", e.target.value)}
+                        className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        {PAYMENT_STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-5">
                       <Label htmlFor="payment-memo" className="text-xs font-medium text-muted-foreground">메모</Label>
                       <Input id="payment-memo" value={paymentForm.memo} onChange={(e) => setPaymentField("memo", e.target.value)} placeholder="내용 (선택)" className="h-9" />
                     </div>
