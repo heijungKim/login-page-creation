@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Pencil, Plus, Trash2 } from "lucide-react"
+import { CalendarClock, Pencil, Plus, Trash2 } from "lucide-react"
 import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -273,6 +273,20 @@ export function TelecomView() {
       .sort((a, b) => (b.registeredAt ?? "").localeCompare(a.registeredAt ?? ""))
   }, [rows, filters])
 
+  // 통신 비용 합계 (전체 / 필터 적용 시 표시 중인 항목)
+  const totalCost = useMemo(() => rows.reduce((sum, r) => sum + (Number(r.cost) || 0), 0), [rows])
+  const filteredCost = useMemo(() => filteredRows.reduce((sum, r) => sum + (Number(r.cost) || 0), 0), [filteredRows])
+  const isFiltered = filteredRows.length !== rows.length
+
+  // 입금 기한: 매월 말일
+  const deposit = useMemo(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+    const daysLeft = Math.round((lastDay.getTime() - today.getTime()) / 86_400_000)
+    return { month: lastDay.getMonth() + 1, day: lastDay.getDate(), daysLeft }
+  }, [])
+
   const loadPayments = useCallback(async (id: number) => {
     setPaymentsLoading(true)
     try {
@@ -467,6 +481,40 @@ export function TelecomView() {
       {submitError ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">{submitError}</div>
       ) : null}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
+          <p className="text-xs font-medium text-muted-foreground">월 통신 비용 합계</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
+            ₩{Math.round(totalCost).toLocaleString("ko-KR")}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {loading
+              ? "불러오는 중..."
+              : isFiltered
+                ? `필터 적용 ${filteredRows.length}건 합계 ₩${Math.round(filteredCost).toLocaleString("ko-KR")}`
+                : `전체 ${rows.length}건 기준`}
+          </p>
+        </div>
+        <div
+          className={cn(
+            "flex items-start gap-3 rounded-lg border px-4 py-3 shadow-sm",
+            deposit.daysLeft <= 3 ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50",
+          )}
+        >
+          <CalendarClock
+            className={cn("mt-0.5 h-5 w-5 shrink-0", deposit.daysLeft <= 3 ? "text-red-600" : "text-amber-600")}
+            aria-hidden="true"
+          />
+          <div className="flex flex-col">
+            <p className={cn("text-xs font-medium", deposit.daysLeft <= 3 ? "text-red-700" : "text-amber-700")}>입금 안내</p>
+            <p className="mt-1 text-base font-semibold text-foreground">통신비는 매월 말일에 입금해야 합니다.</p>
+            <p className={cn("mt-0.5 text-xs font-medium", deposit.daysLeft <= 3 ? "text-red-700" : "text-amber-700")}>
+              이번 달 입금일 {deposit.month}월 {deposit.day}일 · {deposit.daysLeft === 0 ? "오늘 입금일" : `D-${deposit.daysLeft}`}
+            </p>
+          </div>
+        </div>
+      </div>
 
       <Card className="overflow-hidden py-0 shadow-sm">
         <CardContent className="p-0">

@@ -26,6 +26,7 @@ export type MeResponse = {
   id: number
   username: string
   displayName: string
+  superAdmin?: boolean
 }
 
 export class ApiError extends Error {

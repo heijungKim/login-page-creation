@@ -19,6 +19,8 @@ type AdminUser = {
   contact: string
   enabled: boolean
   createdAt: string
+  /** 슈퍼관리자 본인이 조회할 때만 true 인 행이 내려온다 (일반 관리자 목록에는 아예 없음) */
+  superAdmin?: boolean
 }
 
 function getCurrentAdminId(): number | null {
@@ -325,6 +327,9 @@ export function UserManagementView() {
                     <td className="px-4 py-3 text-muted-foreground">{idx + 1}</td>
                     <td className="px-4 py-3 font-medium">
                       {user.username}
+                      {user.superAdmin && (
+                        <Badge className="ml-2 bg-violet-100 text-[10px] text-violet-700">슈퍼관리자</Badge>
+                      )}
                       {user.id === myId && (
                         <Badge variant="outline" className="ml-2 text-[10px]">나</Badge>
                       )}
