@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { CalendarClock, Pencil, Plus, Trash2 } from "lucide-react"
+import { CalendarClock, Check, CheckCheck, Pencil, Plus, Trash2 } from "lucide-react"
 import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -33,6 +33,7 @@ type Telecom = {
   phone: string
   carrier: string
   cost: number
+  balance: number
   paymentDay: string
   bankName: string
   accountNo: string
@@ -81,6 +82,7 @@ const columns: Column[] = [
   { key: "phone", label: "연락처", minWidth: "140px" },
   { key: "carrier", label: "통신사", minWidth: "130px", filterOptions: CARRIER_OPTIONS },
   { key: "cost", label: "통신비용", minWidth: "120px" },
+  { key: "balance", label: "잔액", minWidth: "120px" },
   { key: "paymentDay", label: "납부일", minWidth: "100px" },
   { key: "bankName", label: "은행명", minWidth: "100px" },
   { key: "accountNo", label: "계좌번호", minWidth: "170px" },
@@ -238,7 +240,15 @@ export function TelecomView() {
   const [editError, setEditError] = useState<string | null>(null)
 
   const setFilter = (k: string, v: string) => setFilters((p) => ({ ...p, [k]: v }))
-  const [bulkMode, setBulkMode] = useState(false)
+  // 일괄 선택 모드: 삭제 / 납입 완료
+  const [bulkMode, setBulkMode] = useState<false | "delete" | "complete">(false)
+  const [bulkCompleteConfirm, setBulkCompleteConfirm] = useState(false)
+  const [bulkCompleting, setBulkCompleting] = useState(false)
+  const [completingId, setCompletingId] = useState<number | null>(null)
+  const [completeTarget, setCompleteTarget] = useState<Telecom | null>(null)
+  const [balanceEdit, setBalanceEdit] = useState<string | null>(null)
+  const [balanceSaving, setBalanceSaving] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
@@ -267,7 +277,7 @@ export function TelecomView() {
           const term = filters[col.key]?.trim()
           if (!term) return true
           if (col.filterOptions) return String(row[col.key]) === term
-          if (col.key === "cost") return String(row.cost).includes(term.replace(/,/g, ""))
+          if (col.key === "cost" || col.key === "balance") return String(Math.round(Number(row[col.key]) || 0)).includes(term.replace(/,/g, ""))
           return String(row[col.key] ?? "").toLowerCase().includes(term.toLowerCase())
         }),
       )
@@ -302,6 +312,7 @@ export function TelecomView() {
 
   function openDetail(row: Telecom) {
     setDetail(row)
+    setBalanceEdit(null)
     setEditMode(false)
     setEditError(null)
     setPayForm({ paidDate: "", paidAmount: toCommaNumber(String(Math.round(row.cost))), memo: "" })
@@ -406,6 +417,64 @@ export function TelecomView() {
     }
   }
 
+  function flash(msg: string) {
+    setNotice(msg)
+    window.setTimeout(() => setNotice(null), 3000)
+  }
+
+  // 납입 완료 (단건): 오늘 날짜로 통신 비용만큼 납입 기록 + 잔액 증가
+  async function handleCompletePayment(row: Telecom) {
+    setCompletingId(row.id)
+    setSubmitError(null)
+    try {
+      const updated = await api.post<Telecom>(`/api/telecoms/${row.id}/complete-payment`)
+      setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
+      if (detail?.id === updated.id) { setDetail(updated); void loadPayments(updated.id) }
+      flash(`${updated.owner} 납입 완료 · 잔액 ₩${Math.round(updated.balance).toLocaleString("ko-KR")}`)
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "납입 완료 처리에 실패했습니다.")
+    } finally {
+      setCompletingId(null)
+      setCompleteTarget(null)
+    }
+  }
+
+  // 일괄 납입 완료
+  async function handleBulkComplete() {
+    setBulkCompleting(true)
+    setSubmitError(null)
+    try {
+      const updated = await api.post<Telecom[]>("/api/telecoms/complete-payments", { ids: [...selectedIds] })
+      const byId = new Map(updated.map((u) => [u.id, u]))
+      setRows((prev) => prev.map((r) => byId.get(r.id) ?? r))
+      flash(`${updated.length}건 납입 완료 처리했습니다.`)
+      setSelectedIds(new Set())
+      setBulkMode(false)
+      setBulkCompleteConfirm(false)
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "일괄 납입 완료 처리에 실패했습니다.")
+      setBulkCompleteConfirm(false)
+    } finally {
+      setBulkCompleting(false)
+    }
+  }
+
+  // 잔액 수동 변경
+  async function handleSaveBalance() {
+    if (!detail || balanceEdit === null) return
+    setBalanceSaving(true)
+    try {
+      const updated = await api.put<Telecom>(`/api/telecoms/${detail.id}/balance`, { balance: Number(balanceEdit.replace(/[^\d-]/g, "")) || 0 })
+      setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
+      setDetail(updated)
+      setBalanceEdit(null)
+    } catch (err) {
+      setEditError(err instanceof ApiError ? err.message : "잔액 변경에 실패했습니다.")
+    } finally {
+      setBalanceSaving(false)
+    }
+  }
+
   async function handleSubmit(data: FormData) {
     setSubmitError(null)
     try {
@@ -439,15 +508,26 @@ export function TelecomView() {
         <div className="flex flex-wrap items-center gap-2">
           {bulkMode ? (
             <>
-              {selectedIds.size > 0 && (
+              {bulkMode === "delete" && selectedIds.size > 0 && (
                 <Button variant="destructive" size="sm" onClick={() => setBulkConfirm(true)}>
                   삭제 ({selectedIds.size}건)
+                </Button>
+              )}
+              {bulkMode === "complete" && (
+                <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" disabled={selectedIds.size === 0} onClick={() => setBulkCompleteConfirm(true)}>
+                  <CheckCheck className="h-4 w-4" aria-hidden="true" />
+                  납입 완료 ({selectedIds.size}건)
                 </Button>
               )}
               <Button variant="outline" size="sm" onClick={() => { setBulkMode(false); setSelectedIds(new Set()) }}>취소</Button>
             </>
           ) : (
-            <Button variant="outline" size="sm" onClick={() => setBulkMode(true)}>일괄 삭제</Button>
+            <>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setBulkMode("complete")}>
+                <CheckCheck className="h-4 w-4" aria-hidden="true" />일괄 납입 완료
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setBulkMode("delete")}>일괄 삭제</Button>
+            </>
           )}
           <ExcelUploadButton
             templateName="통신비"
@@ -494,6 +574,14 @@ export function TelecomView() {
       {submitError ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">{submitError}</div>
       ) : null}
+      {notice ? (
+        <div role="status" className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{notice}</div>
+      ) : null}
+      {bulkMode === "complete" ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50/60 px-4 py-2 text-sm text-emerald-800">
+          납입 완료할 항목을 선택하세요. 선택한 항목마다 오늘 날짜로 통신 비용만큼 납입 내역이 기록되고 잔액에 더해집니다.
+        </div>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
@@ -507,6 +595,7 @@ export function TelecomView() {
               : isFiltered
                 ? `필터 적용 ${filteredRows.length}건 합계 ₩${Math.round(filteredCost).toLocaleString("ko-KR")}`
                 : `전체 ${rows.length}건 기준`}
+            {" · 잔액 합계 "}₩{Math.round(rows.reduce((s, r) => s + (Number(r.balance) || 0), 0)).toLocaleString("ko-KR")}
           </p>
         </div>
         <div
@@ -584,12 +673,13 @@ export function TelecomView() {
                       )}
                     </th>
                   ))}
+                  <th className="sticky right-0 z-10 border-b border-l border-border bg-muted px-3 py-2.5 text-center font-medium whitespace-nowrap">납입</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={columns.length} className="h-64 text-center text-muted-foreground">
+                    <td colSpan={columns.length + 1 + (bulkMode ? 1 : 0)} className="h-64 text-center text-muted-foreground">
                       조건에 맞는 항목이 없습니다.
                     </td>
                   </tr>
@@ -626,6 +716,10 @@ export function TelecomView() {
                             <CopyText value={String(Math.round(row.cost))} label="통신비용" className="font-medium tabular-nums">
                               ₩{Math.round(row.cost).toLocaleString("ko-KR")}
                             </CopyText>
+                          ) : col.key === "balance" ? (
+                            <span className={cn("font-medium tabular-nums", Number(row.balance) > 0 ? "text-emerald-700" : "text-muted-foreground")}>
+                              ₩{Math.round(Number(row.balance) || 0).toLocaleString("ko-KR")}
+                            </span>
                           ) : col.key === "accountNo" ? (
                             <CopyText value={(row.accountNo ?? "").trim()} label="계좌번호" className="tabular-nums" />
                           ) : col.key === "memo" ? (
@@ -635,6 +729,18 @@ export function TelecomView() {
                           )}
                         </td>
                       ))}
+                      <td className="sticky right-0 z-10 border-l border-border bg-card px-2 py-1.5 text-center group-hover:bg-accent" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 gap-1 border-emerald-300 px-2 text-xs text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                          disabled={completingId === row.id}
+                          onClick={() => setCompleteTarget(row)}
+                        >
+                          <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                          {completingId === row.id ? "처리 중" : "납입 완료"}
+                        </Button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -645,6 +751,44 @@ export function TelecomView() {
       </Card>
 
       <TelecomDialog open={open} onOpenChange={setOpen} onSubmit={handleSubmit} />
+
+      {/* 납입 완료 확인 (단건) */}
+      <Dialog open={!!completeTarget} onOpenChange={(o) => { if (!o) setCompleteTarget(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>납입 완료</DialogTitle></DialogHeader>
+          {completeTarget && (
+            <p className="py-2 text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">{completeTarget.owner}</span>님 통신비
+              <span className="font-semibold text-foreground"> ₩{Math.round(completeTarget.cost).toLocaleString("ko-KR")}</span>을 오늘 날짜로 납입 완료 처리합니다.<br />
+              잔액이 ₩{Math.round(Number(completeTarget.balance) || 0).toLocaleString("ko-KR")}에서
+              <span className="font-semibold text-emerald-700"> ₩{Math.round((Number(completeTarget.balance) || 0) + completeTarget.cost).toLocaleString("ko-KR")}</span>으로 바뀝니다.
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCompleteTarget(null)}>취소</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={completingId !== null} onClick={() => completeTarget && void handleCompletePayment(completeTarget)}>
+              {completingId !== null ? "처리 중..." : "납입 완료"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 일괄 납입 완료 확인 */}
+      <Dialog open={bulkCompleteConfirm} onOpenChange={(o) => { if (!o) setBulkCompleteConfirm(false) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>일괄 납입 완료</DialogTitle></DialogHeader>
+          <p className="py-2 text-sm text-muted-foreground">
+            선택한 <span className="font-semibold text-foreground">{selectedIds.size}건</span>을 오늘 날짜로 납입 완료 처리합니다.<br />
+            합계 <span className="font-semibold text-foreground">₩{Math.round(rows.filter((r) => selectedIds.has(r.id)).reduce((s, r) => s + r.cost, 0)).toLocaleString("ko-KR")}</span>이 각 잔액에 더해집니다.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkCompleteConfirm(false)}>취소</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={bulkCompleting} onClick={() => void handleBulkComplete()}>
+              {bulkCompleting ? "처리 중..." : "납입 완료"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 일괄 삭제 확인 다이얼로그 */}
       <Dialog open={bulkConfirm} onOpenChange={(o) => { if (!o) setBulkConfirm(false) }}>
@@ -730,6 +874,36 @@ export function TelecomView() {
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[11px] text-muted-foreground">납부일</span>
                       <span>{detail.paymentDay || "-"}</span>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[11px] text-muted-foreground">잔액</span>
+                      {balanceEdit === null ? (
+                        <span className="flex items-center gap-1.5">
+                          <span className="font-semibold tabular-nums text-emerald-700">₩{Math.round(Number(detail.balance) || 0).toLocaleString("ko-KR")}</span>
+                          <button
+                            type="button"
+                            className="text-muted-foreground transition-colors hover:text-foreground"
+                            title="잔액 변경"
+                            aria-label="잔액 변경"
+                            onClick={() => setBalanceEdit(toCommaNumber(String(Math.round(Number(detail.balance) || 0))) || "0")}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1">
+                          <Input
+                            aria-label="잔액"
+                            value={balanceEdit}
+                            onChange={(e) => setBalanceEdit(toCommaNumber(e.target.value))}
+                            onKeyDown={(e) => { if (e.key === "Enter") void handleSaveBalance(); if (e.key === "Escape") setBalanceEdit(null) }}
+                            className="h-8 w-28 text-right text-sm tabular-nums"
+                            autoFocus
+                          />
+                          <Button size="sm" className="h-8 px-2 text-xs" disabled={balanceSaving} onClick={() => void handleSaveBalance()}>저장</Button>
+                          <Button size="sm" variant="outline" className="h-8 px-2 text-xs" onClick={() => setBalanceEdit(null)}>취소</Button>
+                        </span>
+                      )}
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[11px] text-muted-foreground">지급계좌</span>
@@ -821,6 +995,13 @@ export function TelecomView() {
                   </>
                 ) : (
                   <>
+                    <Button
+                      className="mr-auto gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                      disabled={completingId === detail.id}
+                      onClick={() => setCompleteTarget(detail)}
+                    >
+                      <Check className="h-3.5 w-3.5" />{completingId === detail.id ? "처리 중..." : "납입 완료"}
+                    </Button>
                     <Button variant="outline" className="gap-1.5" onClick={startEdit}>
                       <Pencil className="h-3.5 w-3.5" />수정
                     </Button>
