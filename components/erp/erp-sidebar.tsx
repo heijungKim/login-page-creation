@@ -17,6 +17,7 @@ import {
   X,
   Briefcase,
   MessageSquare,
+  BookUser,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -45,6 +46,7 @@ const menuGroups: MenuGroup[] = [
       { id: "closed", label: "폐업 법인", icon: Ban },
       { id: "lease", label: "임대차 현황", icon: FileSignature },
       { id: "audit-region", label: "감사/사업자 지역", icon: MapPinned },
+      { id: "address-book", label: "주소록", icon: BookUser },
     ],
   },
   {

@@ -21,6 +21,7 @@ import { FixedExpenseView } from "@/components/erp/fixed-expense-view"
 import { TaxProgressView } from "@/components/erp/tax-progress-view"
 import { TradingCorporationsView } from "@/components/erp/trading-corporations-view"
 import { InquiryView } from "@/components/erp/inquiry-view"
+import { AddressBookView } from "@/components/erp/address-book-view"
 import { fetchMe } from "@/lib/api"
 
 // 다른 곳에서 세션이 초기화(비밀번호 변경·세션 초기화)되면 이 주기 안에 로그아웃된다.
@@ -131,6 +132,8 @@ export function ErpLayout({ onLogout }: { onLogout: () => void }) {
               <TradingCorporationsView />
             ) : active === "inquiry" ? (
               <InquiryView />
+            ) : active === "address-book" ? (
+              <AddressBookView />
             ) : active === "user-management" ? (
               <UserManagementView />
             ) : (
