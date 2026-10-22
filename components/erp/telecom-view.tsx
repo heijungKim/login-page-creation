@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { CalendarClock, Check, CheckCheck, Pencil, Plus, Trash2 } from "lucide-react"
+import { CalendarClock, Check, CheckCheck, ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react"
 import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -35,6 +35,9 @@ type Telecom = {
   cost: number
   balance: number
   paymentDay: string
+  yearMonth?: string
+  paidThisMonth?: boolean
+  paidDateThisMonth?: string | null
   bankName: string
   accountNo: string
   memo: string
@@ -253,12 +256,20 @@ export function TelecomView() {
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
+  // 조회 월 (매달 별도로 관리, 항목은 다음 달로 이어짐)
+  const nowDate = new Date()
+  const [viewYear, setViewYear] = useState(nowDate.getFullYear())
+  const [viewMonth, setViewMonth] = useState(nowDate.getMonth() + 1)
+  const ym = `${viewYear}-${String(viewMonth).padStart(2, "0")}`
+  const isCurrentMonth = viewYear === nowDate.getFullYear() && viewMonth === nowDate.getMonth() + 1
+  function prevMonth() { if (viewMonth === 1) { setViewYear((y) => y - 1); setViewMonth(12) } else setViewMonth((m) => m - 1) }
+  function nextMonth() { if (viewMonth === 12) { setViewYear((y) => y + 1); setViewMonth(1) } else setViewMonth((m) => m + 1) }
+
   async function refresh() {
     setLoading(true)
     setError(null)
     try {
-      const page = await api.get<PageResponse<Telecom>>("/api/telecoms?size=200")
-      setRows(page.content)
+      setRows(await api.get<Telecom[]>(`/api/telecoms/monthly?yearMonth=${ym}`))
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "통신비 목록을 불러오지 못했습니다.")
     } finally {
@@ -267,8 +278,11 @@ export function TelecomView() {
   }
 
   useEffect(() => {
+    setSelectedIds(new Set())
+    setDetail(null)
     void refresh()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ym])
 
   const filteredRows = useMemo(() => {
     return rows
@@ -293,10 +307,11 @@ export function TelecomView() {
   const deposit = useMemo(() => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+    const lastDay = new Date(viewYear, viewMonth, 0)
     const daysLeft = Math.round((lastDay.getTime() - today.getTime()) / 86_400_000)
     return { month: lastDay.getMonth() + 1, day: lastDay.getDate(), daysLeft }
-  }, [])
+  }, [viewYear, viewMonth])
+  const unpaidCount = rows.filter((r) => !r.paidThisMonth).length
 
   const loadPayments = useCallback(async (id: number) => {
     setPaymentsLoading(true)
@@ -352,7 +367,7 @@ export function TelecomView() {
     setEditSubmitting(true)
     setEditError(null)
     try {
-      const updated = await api.put<Telecom>(`/api/telecoms/${detail.id}`, {
+      const updated = await api.put<Telecom>(`/api/telecoms/${detail.id}/monthly?yearMonth=${ym}`, {
         owner: editForm.owner,
         phone: editForm.phone,
         carrier: editForm.carrier,
@@ -404,7 +419,7 @@ export function TelecomView() {
     setBulkDeleting(true)
     try {
       for (const id of selectedIds) {
-        await api.delete(`/api/telecoms/${id}`)
+        await api.delete(`/api/telecoms/${id}/monthly?yearMonth=${ym}`)
       }
       await refresh()
       setSelectedIds(new Set())
@@ -427,10 +442,10 @@ export function TelecomView() {
     setCompletingId(row.id)
     setSubmitError(null)
     try {
-      const updated = await api.post<Telecom>(`/api/telecoms/${row.id}/complete-payment`)
+      const updated = await api.post<Telecom>(`/api/telecoms/${row.id}/complete-payment?yearMonth=${ym}`)
       setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
       if (detail?.id === updated.id) { setDetail(updated); void loadPayments(updated.id) }
-      flash(`${updated.owner} 납입 완료 · 잔액 ₩${Math.round(updated.balance).toLocaleString("ko-KR")}`)
+      flash(`${updated.owner} ${viewMonth}월 납입 완료 · 잔액 ₩${Math.round(updated.balance).toLocaleString("ko-KR")}`)
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : "납입 완료 처리에 실패했습니다.")
     } finally {
@@ -444,10 +459,10 @@ export function TelecomView() {
     setBulkCompleting(true)
     setSubmitError(null)
     try {
-      const updated = await api.post<Telecom[]>("/api/telecoms/complete-payments", { ids: [...selectedIds] })
+      const updated = await api.post<Telecom[]>("/api/telecoms/complete-payments", { ids: [...selectedIds], yearMonth: ym })
       const byId = new Map(updated.map((u) => [u.id, u]))
       setRows((prev) => prev.map((r) => byId.get(r.id) ?? r))
-      flash(`${updated.length}건 납입 완료 처리했습니다.`)
+      flash(`${viewMonth}월 ${updated.length}건 납입 완료 처리했습니다.` + (updated.length < selectedIds.size ? ` (이미 완료된 ${selectedIds.size - updated.length}건 제외)` : ""))
       setSelectedIds(new Set())
       setBulkMode(false)
       setBulkCompleteConfirm(false)
@@ -478,7 +493,7 @@ export function TelecomView() {
   async function handleSubmit(data: FormData) {
     setSubmitError(null)
     try {
-      await api.post<Telecom>("/api/telecoms", {
+      await api.post<Telecom>(`/api/telecoms/monthly?yearMonth=${ym}`, {
         owner: data.owner,
         phone: data.phone,
         carrier: data.carrier,
@@ -547,7 +562,7 @@ export function TelecomView() {
               for (let i = 0; i < rows.length; i++) {
                 const r = rows[i]
                 try {
-                  await api.post("/api/telecoms", {
+                  await api.post(`/api/telecoms/monthly?yearMonth=${ym}`, {
                     owner: r.owner, phone: r.phone || "", carrier: r.carrier,
                     cost: Number(r.cost.replace(/,/g, "")) || 0,
                     paymentDay: r.paymentDay || "",
@@ -579,13 +594,31 @@ export function TelecomView() {
       ) : null}
       {bulkMode === "complete" ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50/60 px-4 py-2 text-sm text-emerald-800">
-          납입 완료할 항목을 선택하세요. 선택한 항목마다 오늘 날짜로 통신 비용만큼 납입 내역이 기록되고 잔액에 더해집니다.
+          {viewMonth}월 납입 완료할 항목을 선택하세요. 선택한 항목마다 통신 비용만큼 납입 내역이 기록되고 잔액에 더해집니다.
         </div>
       ) : null}
 
+      <div className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-2.5">
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={prevMonth} aria-label="이전 달">
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold">{viewYear}년 {viewMonth}월</span>
+          {!isCurrentMonth && (
+            <button type="button" className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              onClick={() => { setViewYear(nowDate.getFullYear()); setViewMonth(nowDate.getMonth() + 1) }}>
+              이번 달
+            </button>
+          )}
+        </div>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={nextMonth} aria-label="다음 달">
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
-          <p className="text-xs font-medium text-muted-foreground">월 통신 비용 합계</p>
+          <p className="text-xs font-medium text-muted-foreground">{viewMonth}월 통신 비용 합계 · 미납 {unpaidCount}건</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
             ₩{Math.round(totalCost).toLocaleString("ko-KR")}
           </p>
@@ -601,7 +634,7 @@ export function TelecomView() {
         <div
           className={cn(
             "flex items-start gap-3 rounded-lg border px-4 py-3 shadow-sm",
-            deposit.daysLeft <= 3 ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50",
+            isCurrentMonth && deposit.daysLeft <= 3 ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50",
           )}
         >
           <CalendarClock
@@ -612,7 +645,7 @@ export function TelecomView() {
             <p className={cn("text-xs font-medium", deposit.daysLeft <= 3 ? "text-red-700" : "text-amber-700")}>입금 안내</p>
             <p className="mt-1 text-base font-semibold text-foreground">통신비는 매월 말일에 입금해야 합니다.</p>
             <p className={cn("mt-0.5 text-xs font-medium", deposit.daysLeft <= 3 ? "text-red-700" : "text-amber-700")}>
-              이번 달 입금일 {deposit.month}월 {deposit.day}일 · {deposit.daysLeft === 0 ? "오늘 입금일" : `D-${deposit.daysLeft}`}
+              {deposit.month}월 입금일 {deposit.month}월 {deposit.day}일{isCurrentMonth ? ` · ${deposit.daysLeft === 0 ? "오늘 입금일" : `D-${deposit.daysLeft}`}` : ""}
             </p>
           </div>
         </div>
@@ -730,16 +763,23 @@ export function TelecomView() {
                         </td>
                       ))}
                       <td className="sticky right-0 z-10 border-l border-border bg-card px-2 py-1.5 text-center group-hover:bg-accent" onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 gap-1 border-emerald-300 px-2 text-xs text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
-                          disabled={completingId === row.id}
-                          onClick={() => setCompleteTarget(row)}
-                        >
-                          <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                          {completingId === row.id ? "처리 중" : "납입 완료"}
-                        </Button>
+                        {row.paidThisMonth ? (
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                            <Check className="h-3 w-3" aria-hidden="true" />
+                            완료{row.paidDateThisMonth ? ` ${row.paidDateThisMonth.slice(5).replace("-", "/")}` : ""}
+                          </span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 gap-1 border-emerald-300 px-2 text-xs text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                            disabled={completingId === row.id}
+                            onClick={() => setCompleteTarget(row)}
+                          >
+                            <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                            {completingId === row.id ? "처리 중" : "납입 완료"}
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -759,7 +799,7 @@ export function TelecomView() {
           {completeTarget && (
             <p className="py-2 text-sm text-muted-foreground">
               <span className="font-semibold text-foreground">{completeTarget.owner}</span>님 통신비
-              <span className="font-semibold text-foreground"> ₩{Math.round(completeTarget.cost).toLocaleString("ko-KR")}</span>을 오늘 날짜로 납입 완료 처리합니다.<br />
+              <span className="font-semibold text-foreground"> ₩{Math.round(completeTarget.cost).toLocaleString("ko-KR")}</span>을 {viewMonth}월분으로 납입 완료 처리합니다.<br />
               잔액이 ₩{Math.round(Number(completeTarget.balance) || 0).toLocaleString("ko-KR")}에서
               <span className="font-semibold text-emerald-700"> ₩{Math.round((Number(completeTarget.balance) || 0) + completeTarget.cost).toLocaleString("ko-KR")}</span>으로 바뀝니다.
             </p>
@@ -778,8 +818,8 @@ export function TelecomView() {
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>일괄 납입 완료</DialogTitle></DialogHeader>
           <p className="py-2 text-sm text-muted-foreground">
-            선택한 <span className="font-semibold text-foreground">{selectedIds.size}건</span>을 오늘 날짜로 납입 완료 처리합니다.<br />
-            합계 <span className="font-semibold text-foreground">₩{Math.round(rows.filter((r) => selectedIds.has(r.id)).reduce((s, r) => s + r.cost, 0)).toLocaleString("ko-KR")}</span>이 각 잔액에 더해집니다.
+            선택한 항목 중 {viewMonth}월 미납 <span className="font-semibold text-foreground">{rows.filter((r) => selectedIds.has(r.id) && !r.paidThisMonth).length}건</span>을 납입 완료 처리합니다.<br />
+            합계 <span className="font-semibold text-foreground">₩{Math.round(rows.filter((r) => selectedIds.has(r.id) && !r.paidThisMonth).reduce((s, r) => s + r.cost, 0)).toLocaleString("ko-KR")}</span>이 각 잔액에 더해집니다. 이미 완료된 항목은 건너뜁니다.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBulkCompleteConfirm(false)}>취소</Button>
@@ -795,8 +835,8 @@ export function TelecomView() {
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>일괄 삭제</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground py-2">
-            선택한 <span className="font-semibold text-foreground">{selectedIds.size}건</span>을 삭제하시겠습니까?<br />
-            삭제 후 복구할 수 없습니다.
+            선택한 <span className="font-semibold text-foreground">{selectedIds.size}건</span>을 {viewYear}년 {viewMonth}월부터 삭제하시겠습니까?<br />
+            이전 달 기록은 그대로 남습니다. (이번 달에 새로 등록한 항목은 완전히 삭제됩니다)
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBulkConfirm(false)}>취소</Button>
@@ -997,10 +1037,11 @@ export function TelecomView() {
                   <>
                     <Button
                       className="mr-auto gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-                      disabled={completingId === detail.id}
+                      disabled={completingId === detail.id || !!detail.paidThisMonth}
                       onClick={() => setCompleteTarget(detail)}
                     >
-                      <Check className="h-3.5 w-3.5" />{completingId === detail.id ? "처리 중..." : "납입 완료"}
+                      <Check className="h-3.5 w-3.5" />
+                      {detail.paidThisMonth ? `${viewMonth}월 납입 완료됨` : completingId === detail.id ? "처리 중..." : `${viewMonth}월 납입 완료`}
                     </Button>
                     <Button variant="outline" className="gap-1.5" onClick={startEdit}>
                       <Pencil className="h-3.5 w-3.5" />수정
