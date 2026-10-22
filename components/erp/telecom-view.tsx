@@ -24,6 +24,7 @@ import {
 import { cn, toCommaNumber } from "@/lib/utils"
 import { ApiError, api } from "@/lib/api"
 import { ChangeHistory } from "@/components/erp/change-history"
+import { CopyText } from "@/components/erp/copy-text"
 
 type Telecom = {
   id: number
@@ -622,7 +623,11 @@ export function TelecomView() {
                           {col.key === "carrier" ? (
                             <CarrierBadge carrier={row.carrier} />
                           ) : col.key === "cost" ? (
-                            <span className="font-medium tabular-nums">₩{Math.round(row.cost).toLocaleString("ko-KR")}</span>
+                            <CopyText value={String(Math.round(row.cost))} label="통신비용" className="font-medium tabular-nums">
+                              ₩{Math.round(row.cost).toLocaleString("ko-KR")}
+                            </CopyText>
+                          ) : col.key === "accountNo" ? (
+                            <CopyText value={(row.accountNo ?? "").trim()} label="계좌번호" className="tabular-nums" />
                           ) : col.key === "memo" ? (
                             <span className="text-muted-foreground">{row.memo || "-"}</span>
                           ) : (
@@ -718,7 +723,9 @@ export function TelecomView() {
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[11px] text-muted-foreground">통신비용</span>
-                      <span className="font-medium tabular-nums">₩{Math.round(detail.cost).toLocaleString("ko-KR")}</span>
+                      <CopyText value={String(Math.round(detail.cost))} label="통신비용" className="font-medium tabular-nums">
+                        ₩{Math.round(detail.cost).toLocaleString("ko-KR")}
+                      </CopyText>
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[11px] text-muted-foreground">납부일</span>
@@ -726,7 +733,10 @@ export function TelecomView() {
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[11px] text-muted-foreground">지급계좌</span>
-                      <span>{[detail.bankName, detail.accountNo].filter(Boolean).join(" ") || "-"}</span>
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        {detail.bankName && <span>{detail.bankName}</span>}
+                        {detail.accountNo ? <CopyText value={detail.accountNo.trim()} label="계좌번호" className="tabular-nums" /> : !detail.bankName && "-"}
+                      </span>
                     </div>
                     {detail.memo && (
                       <div className="col-span-2 flex flex-col gap-0.5 sm:col-span-3">
