@@ -22,7 +22,7 @@ import { TaxProgressView } from "@/components/erp/tax-progress-view"
 import { TradingCorporationsView } from "@/components/erp/trading-corporations-view"
 import { InquiryView } from "@/components/erp/inquiry-view"
 import { AddressBookView } from "@/components/erp/address-book-view"
-import { fetchMe } from "@/lib/api"
+import { fetchMe, refreshTokenIfNeeded } from "@/lib/api"
 
 // 다른 곳에서 세션이 초기화(비밀번호 변경·세션 초기화)되면 이 주기 안에 로그아웃된다.
 const SESSION_CHECK_INTERVAL_MS = 60_000
@@ -46,7 +46,11 @@ export function ErpLayout({ onLogout }: { onLogout: () => void }) {
 
   // 세션 유효성 주기 확인: 토큰이 무효화되면 401 → 전역 핸들러가 로그아웃 처리
   useEffect(() => {
-    const check = () => { if (document.visibilityState === "visible") fetchMe().catch(() => {}) }
+    const check = () => {
+      if (document.visibilityState !== "visible") return
+      void refreshTokenIfNeeded().then(() => fetchMe()).catch(() => {})
+    }
+    check()
     const timer = window.setInterval(check, SESSION_CHECK_INTERVAL_MS)
     document.addEventListener("visibilitychange", check)
     window.addEventListener("focus", check)

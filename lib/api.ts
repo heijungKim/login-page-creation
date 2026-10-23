@@ -3,6 +3,8 @@ import {
   clearAccessToken,
   getAccessToken,
   getApiBaseUrl,
+  getPersistedUsername,
+  isPersistLogin,
   saveAccessToken,
   type LoginResponse,
   type MeResponse,
@@ -140,11 +142,56 @@ export async function login(
 ): Promise<LoginResponse> {
   const data = await api.post<LoginResponse>(
     "/api/auth/login",
-    { username, password },
+    { username, password, rememberMe: persist },
     { auth: false },
   )
   saveAccessToken(data.accessToken, persist, username)
   return data
+}
+
+/** JWT payload 의 iat/exp (초) */
+function readTokenTimes(token: string): { iat: number; exp: number } | null {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")))
+    if (typeof payload.exp !== "number") return null
+    return { iat: typeof payload.iat === "number" ? payload.iat : payload.exp - 3600, exp: payload.exp }
+  } catch {
+    return null
+  }
+}
+
+let refreshing: Promise<void> | null = null
+
+/**
+ * 사용 중 토큰 자동 연장.
+ * - 유효 기간의 절반이 지났으면 새 토큰으로 바꾼다 (자동로그인은 30일, 일반 로그인은 1시간 단위).
+ * - 자동로그인인데 예전 1시간짜리 토큰이면 바로 자동로그인 토큰으로 바꾼다.
+ * - 이미 만료됐거나 강제 로그아웃된 토큰이면 401 → 전역 로그아웃 처리.
+ */
+export async function refreshTokenIfNeeded(): Promise<void> {
+  const token = getAccessToken()
+  if (!token) return
+  const times = readTokenTimes(token)
+  if (!times) return
+  const now = Date.now() / 1000
+  if (times.exp <= now) return // 만료 토큰은 다음 요청에서 401 처리
+  const persist = isPersistLogin()
+  const lifetime = times.exp - times.iat
+  const halfPassed = now - times.iat >= lifetime / 2
+  const upgradeToRemember = persist && lifetime < 24 * 3600
+  if (!halfPassed && !upgradeToRemember) return
+  if (refreshing) return refreshing
+  refreshing = (async () => {
+    try {
+      const data = await api.post<LoginResponse>("/api/auth/refresh", { rememberMe: persist })
+      saveAccessToken(data.accessToken, persist, persist ? getPersistedUsername() || data.username : undefined)
+    } catch {
+      // 401 은 apiFetch 가 전역 로그아웃으로 처리, 그 외 오류는 다음 주기에 재시도
+    } finally {
+      refreshing = null
+    }
+  })()
+  return refreshing
 }
 
 export async function fetchMe(): Promise<MeResponse> {
