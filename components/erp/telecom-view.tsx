@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { CalendarClock, Check, CheckCheck, ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react"
+import { CalendarClock, Check, CheckCheck, ChevronLeft, ChevronRight, ExternalLink, Eye, EyeOff, Pencil, Plus, Trash2 } from "lucide-react"
 import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -34,6 +34,9 @@ type Telecom = {
   carrier: string
   cost: number
   balance: number
+  siteUrl?: string
+  loginId?: string
+  loginPw?: string
   paymentDay: string
   yearMonth?: string
   paidThisMonth?: boolean
@@ -84,6 +87,8 @@ const columns: Column[] = [
   { key: "owner", label: "명의자", minWidth: "110px" },
   { key: "phone", label: "연락처", minWidth: "140px" },
   { key: "carrier", label: "통신사", minWidth: "130px", filterOptions: CARRIER_OPTIONS },
+  { key: "loginId", label: "아이디", minWidth: "120px" },
+  { key: "loginPw", label: "비밀번호", minWidth: "100px" },
   { key: "cost", label: "통신비용", minWidth: "120px" },
   { key: "balance", label: "잔액", minWidth: "120px" },
   { key: "paymentDay", label: "납부일", minWidth: "100px" },
@@ -131,11 +136,88 @@ type FormData = {
   bankName: string
   accountNo: string
   memo: string
+  siteUrl: string
+  loginId: string
+  loginPw: string
 }
 
 const emptyForm: FormData = {
   owner: "", phone: "", carrier: "SKT", cost: "",
   paymentDay: "매월 1일", bankName: "", accountNo: "", memo: "",
+  siteUrl: "", loginId: "", loginPw: "",
+}
+
+/** 스킴이 없으면 https:// 를 붙인다 */
+function normalizeUrl(url: string): string {
+  const u = url.trim()
+  if (!u) return ""
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(u) ? u : `https://${u}`
+}
+
+/** 사이트 로그인 정보 입력칸 (등록/수정 공용) */
+function SiteLoginFields({
+  idPrefix, form, set,
+}: {
+  idPrefix: string
+  form: Pick<FormData, "siteUrl" | "loginId" | "loginPw">
+  set: (k: "siteUrl" | "loginId" | "loginPw", v: string) => void
+}) {
+  const [showPw, setShowPw] = useState(false)
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs font-medium text-muted-foreground">통신사 사이트 / 로그인 정보</p>
+      <div className="grid grid-cols-2 gap-4 rounded-lg border border-border p-3">
+        <div className="col-span-2 flex flex-col gap-1.5">
+          <Label htmlFor={`${idPrefix}-site-url`} className="text-xs text-muted-foreground">사이트 URL</Label>
+          <Input id={`${idPrefix}-site-url`} value={form.siteUrl} onChange={(e) => set("siteUrl", e.target.value)} placeholder="예: https://www.sktelecom.com" inputMode="url" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={`${idPrefix}-login-id`} className="text-xs text-muted-foreground">아이디</Label>
+          <Input id={`${idPrefix}-login-id`} value={form.loginId} onChange={(e) => set("loginId", e.target.value)} placeholder="로그인 아이디" autoComplete="off" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={`${idPrefix}-login-pw`} className="text-xs text-muted-foreground">비밀번호</Label>
+          <div className="relative">
+            <Input id={`${idPrefix}-login-pw`} type={showPw ? "text" : "password"} value={form.loginPw} onChange={(e) => set("loginPw", e.target.value)} placeholder="로그인 비밀번호" autoComplete="new-password" className="pr-9" />
+            <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" aria-label={showPw ? "비밀번호 숨기기" : "비밀번호 보기"}>
+              {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** 통신사 배지: 사이트 URL 이 있으면 새 탭으로 열고 아이디를 클립보드에 복사한다. */
+function CarrierLink({ row }: { row: Pick<Telecom, "carrier" | "siteUrl" | "loginId"> }) {
+  const [copied, setCopied] = useState(false)
+  const url = normalizeUrl(row.siteUrl ?? "")
+  if (!url) return <CarrierBadge carrier={row.carrier} />
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={row.loginId ? `${url} 열기 (아이디 복사됨)` : `${url} 열기`}
+      onClick={(e) => {
+        e.stopPropagation()
+        const id = (row.loginId ?? "").trim()
+        if (id && navigator.clipboard && window.isSecureContext) {
+          void navigator.clipboard.writeText(id).then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 1500) }).catch(() => {})
+        }
+      }}
+      className="relative inline-flex items-center gap-1 rounded-full hover:opacity-80"
+    >
+      <CarrierBadge carrier={row.carrier} />
+      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+      {copied && (
+        <span role="status" className="pointer-events-none absolute -top-7 left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded bg-emerald-600 px-2 py-0.5 text-[11px] font-medium text-white shadow">
+          아이디 복사됨
+        </span>
+      )}
+    </a>
+  )
 }
 
 function TelecomDialog({
@@ -207,6 +289,8 @@ function TelecomDialog({
                 onChange={(v) => set("accountNo", v)} placeholder="예: 123-456-789012" />
             </div>
           </div>
+
+          <SiteLoginFields idPrefix="tc" form={form} set={(k, v) => set(k, v)} />
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="tc-memo" className="text-xs text-muted-foreground">비고</Label>
@@ -345,6 +429,9 @@ export function TelecomView() {
       bankName: detail.bankName,
       accountNo: detail.accountNo,
       memo: detail.memo,
+      siteUrl: detail.siteUrl ?? "",
+      loginId: detail.loginId ?? "",
+      loginPw: detail.loginPw ?? "",
     })
     setEditError(null)
     setEditMode(true)
@@ -359,7 +446,10 @@ export function TelecomView() {
     editForm.paymentDay !== detail.paymentDay ||
     editForm.bankName !== detail.bankName ||
     editForm.accountNo !== detail.accountNo ||
-    editForm.memo !== detail.memo
+    editForm.memo !== detail.memo ||
+    editForm.siteUrl !== (detail.siteUrl ?? "") ||
+    editForm.loginId !== (detail.loginId ?? "") ||
+    editForm.loginPw !== (detail.loginPw ?? "")
   )
 
   async function handleEdit() {
@@ -376,6 +466,9 @@ export function TelecomView() {
         bankName: editForm.bankName,
         accountNo: editForm.accountNo,
         memo: editForm.memo,
+        siteUrl: normalizeUrl(editForm.siteUrl),
+        loginId: editForm.loginId,
+        loginPw: editForm.loginPw,
       })
       setDetail(updated)
       setEditMode(false)
@@ -502,6 +595,9 @@ export function TelecomView() {
         bankName: data.bankName,
         accountNo: data.accountNo,
         memo: data.memo,
+        siteUrl: normalizeUrl(data.siteUrl),
+        loginId: data.loginId,
+        loginPw: data.loginPw,
       })
       await refresh()
     } catch (err) {
@@ -744,7 +840,11 @@ export function TelecomView() {
                           style={{ left: colIdx < 3 ? stickyOffsets[colIdx] : undefined }}
                         >
                           {col.key === "carrier" ? (
-                            <CarrierBadge carrier={row.carrier} />
+                            <CarrierLink row={row} />
+                          ) : col.key === "loginId" ? (
+                            <CopyText value={(row.loginId ?? "").trim()} label="아이디" />
+                          ) : col.key === "loginPw" ? (
+                            <CopyText value={row.loginPw ?? ""} label="비밀번호">{row.loginPw ? "●●●●" : "-"}</CopyText>
                           ) : col.key === "cost" ? (
                             <CopyText value={String(Math.round(row.cost))} label="통신비용" className="font-medium tabular-nums">
                               ₩{Math.round(row.cost).toLocaleString("ko-KR")}
@@ -886,6 +986,7 @@ export function TelecomView() {
                           <Field id="edit-account" label="계좌번호" value={editForm.accountNo} onChange={(v) => setEditForm((p) => ({ ...p, accountNo: v }))} placeholder="예: 123-456-789012" />
                         </div>
                       </div>
+                      <SiteLoginFields idPrefix="edit" form={editForm} set={(k, v) => setEditForm((p) => ({ ...p, [k]: v }))} />
                       <div className="flex flex-col gap-1.5">
                         <Label htmlFor="edit-memo" className="text-xs text-muted-foreground">비고</Label>
                         <Textarea id="edit-memo" value={editForm.memo} onChange={(e) => setEditForm((p) => ({ ...p, memo: e.target.value }))} placeholder="추가 메모를 입력하세요" rows={3} />
@@ -903,7 +1004,7 @@ export function TelecomView() {
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[11px] text-muted-foreground">통신사</span>
-                      <CarrierBadge carrier={detail.carrier} />
+                      <CarrierLink row={detail} />
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[11px] text-muted-foreground">통신비용</span>
@@ -944,6 +1045,14 @@ export function TelecomView() {
                           <Button size="sm" variant="outline" className="h-8 px-2 text-xs" onClick={() => setBalanceEdit(null)}>취소</Button>
                         </span>
                       )}
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[11px] text-muted-foreground">아이디</span>
+                      <CopyText value={(detail.loginId ?? "").trim()} label="아이디" />
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[11px] text-muted-foreground">비밀번호</span>
+                      <CopyText value={detail.loginPw ?? ""} label="비밀번호">{detail.loginPw ? "●●●●" : "-"}</CopyText>
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[11px] text-muted-foreground">지급계좌</span>
