@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { CalendarClock, Check, CheckCheck, ChevronLeft, ChevronRight, ExternalLink, Eye, EyeOff, Pencil, Plus, Trash2 } from "lucide-react"
+import { BookUser, CalendarClock, Check, CheckCheck, ChevronLeft, ChevronRight, ExternalLink, Eye, EyeOff, Pencil, Plus, Trash2 } from "lucide-react"
 import { ExcelUploadButton, type ExcelColumn } from "@/components/erp/excel-upload-button"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -25,6 +25,7 @@ import { cn, toCommaNumber } from "@/lib/utils"
 import { ApiError, api } from "@/lib/api"
 import { ChangeHistory } from "@/components/erp/change-history"
 import { CopyText } from "@/components/erp/copy-text"
+import { LinkBook } from "@/components/erp/link-book"
 import { useCorporations } from "@/components/erp/corporations-context"
 
 type Telecom = {
@@ -189,13 +190,26 @@ function SiteLoginFields({
   set: (k: "siteUrl" | "loginId" | "loginPw", v: string) => void
 }) {
   const [showPw, setShowPw] = useState(false)
+  const [bookOpen, setBookOpen] = useState(false)
   return (
     <div className="flex flex-col gap-2">
       <p className="text-xs font-medium text-muted-foreground">통신사 사이트 / 로그인 정보</p>
       <div className="grid grid-cols-2 gap-4 rounded-lg border border-border p-3">
         <div className="col-span-2 flex flex-col gap-1.5">
           <Label htmlFor={`${idPrefix}-site-url`} className="text-xs text-muted-foreground">사이트 URL</Label>
-          <Input id={`${idPrefix}-site-url`} value={form.siteUrl} onChange={(e) => set("siteUrl", e.target.value)} placeholder="예: https://www.sktelecom.com" inputMode="url" />
+          <div className="flex gap-2">
+            <Input id={`${idPrefix}-site-url`} value={form.siteUrl} onChange={(e) => set("siteUrl", e.target.value)} placeholder="예: https://www.sktelecom.com" inputMode="url" className="flex-1" />
+            <Button type="button" variant={bookOpen ? "default" : "outline"} className="shrink-0 gap-1.5" onClick={() => setBookOpen((v) => !v)} aria-expanded={bookOpen}>
+              <BookUser className="h-4 w-4" aria-hidden="true" />주소록
+            </Button>
+          </div>
+          {bookOpen && (
+            <LinkBook
+              currentUrl={form.siteUrl}
+              onSelect={(l) => { set("siteUrl", l.url); setBookOpen(false) }}
+              onClose={() => setBookOpen(false)}
+            />
+          )}
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={`${idPrefix}-login-id`} className="text-xs text-muted-foreground">아이디</Label>
