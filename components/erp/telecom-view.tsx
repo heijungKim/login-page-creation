@@ -25,6 +25,7 @@ import { cn, toCommaNumber } from "@/lib/utils"
 import { ApiError, api } from "@/lib/api"
 import { ChangeHistory } from "@/components/erp/change-history"
 import { CopyText } from "@/components/erp/copy-text"
+import { useCorporations } from "@/components/erp/corporations-context"
 
 type Telecom = {
   id: number
@@ -35,6 +36,8 @@ type Telecom = {
   cost: number
   balance: number
   siteUrl?: string
+  // 명의자와 대표가 같은 법인명 (화면에서 계산, 쉼표 구분)
+  corpNames?: string
   loginId?: string
   loginPw?: string
   paymentDay: string
@@ -87,6 +90,7 @@ const columns: Column[] = [
   { key: "owner", label: "명의자", minWidth: "110px" },
   { key: "phone", label: "연락처", minWidth: "140px" },
   { key: "carrier", label: "통신사", minWidth: "130px", filterOptions: CARRIER_OPTIONS },
+  { key: "corpNames", label: "법인", minWidth: "180px" },
   { key: "loginId", label: "아이디", minWidth: "120px" },
   { key: "loginPw", label: "비밀번호", minWidth: "100px" },
   { key: "cost", label: "통신비용", minWidth: "120px" },
@@ -368,8 +372,27 @@ export function TelecomView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ym])
 
+  // 법인 관리의 대표자명과 명의자가 같은 법인 (폐업 제외, 공백 무시)
+  const { rows: corporations } = useCorporations()
+  const corpNamesByCeo = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const c of corporations) {
+      if (c.status === "폐업") continue
+      const key = (c.ceo ?? "").replace(/s/g, "")
+      if (!key) continue
+      const name = (c.name ?? "").replace(/s+/g, " ").trim()
+      if (!name) continue
+      const list = map.get(key) ?? []
+      if (!list.includes(name)) list.push(name)
+      map.set(key, list)
+    }
+    return map
+  }, [corporations])
+  const corpNamesFor = (owner: string) => (corpNamesByCeo.get((owner ?? "").replace(/s/g, "")) ?? []).join(", ")
+
   const filteredRows = useMemo(() => {
     return rows
+      .map((row) => ({ ...row, corpNames: corpNamesFor(row.owner) }))
       .filter((row) =>
         columns.every((col) => {
           const term = filters[col.key]?.trim()
@@ -380,7 +403,8 @@ export function TelecomView() {
         }),
       )
       .sort((a, b) => (b.registeredAt ?? "").localeCompare(a.registeredAt ?? ""))
-  }, [rows, filters])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, filters, corpNamesByCeo])
 
   // 통신 비용 합계 (전체 / 필터 적용 시 표시 중인 항목)
   const totalCost = useMemo(() => rows.reduce((sum, r) => sum + (Number(r.cost) || 0), 0), [rows])
@@ -997,6 +1021,10 @@ export function TelecomView() {
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[11px] text-muted-foreground">명의자</span>
                       <span className="font-medium">{detail.owner || "-"}</span>
+                    </div>
+                    <div className="col-span-2 flex flex-col gap-0.5">
+                      <span className="text-[11px] text-muted-foreground">대표 법인</span>
+                      <span>{corpNamesFor(detail.owner) || "-"}</span>
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[11px] text-muted-foreground">연락처</span>
