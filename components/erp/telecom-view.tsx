@@ -863,7 +863,9 @@ export function TelecomView() {
                           )}
                           style={{ left: colIdx < 3 ? stickyOffsets[colIdx] : undefined }}
                         >
-                          {col.key === "carrier" ? (
+                          {col.key === "owner" ? (
+                            <CopyText value={(row.owner ?? "").trim()} label="이름" className="font-medium" />
+                          ) : col.key === "carrier" ? (
                             <CarrierLink row={row} />
                           ) : col.key === "loginId" ? (
                             <CopyText value={(row.loginId ?? "").trim()} label="아이디" />
@@ -1020,7 +1022,7 @@ export function TelecomView() {
                   <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[11px] text-muted-foreground">명의자</span>
-                      <span className="font-medium">{detail.owner || "-"}</span>
+                      <CopyText value={(detail.owner ?? "").trim()} label="이름" className="font-medium" />
                     </div>
                     <div className="col-span-2 flex flex-col gap-0.5">
                       <span className="text-[11px] text-muted-foreground">대표 법인</span>
