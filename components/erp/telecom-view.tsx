@@ -34,6 +34,7 @@ type Telecom = {
   phone: string
   carrier: string
   cost: number
+  useStatus?: string
   balance: number
   siteUrl?: string
   // 명의자와 대표가 같은 법인명 (화면에서 계산, 쉼표 구분)
@@ -86,11 +87,16 @@ type Column = {
   filterOptions?: string[]
 }
 
+const USE_STATUS_OPTIONS = ["사용", "미사용"]
+
+// 법인 열은 고정 너비(줄바꿈), 앞의 두 열(법인·명의자)은 가로 스크롤 시 고정
+const CORP_COL_WIDTH = 200
 const columns: Column[] = [
+  { key: "corpNames", label: "법인", minWidth: `${CORP_COL_WIDTH}px` },
   { key: "owner", label: "명의자", minWidth: "110px" },
+  { key: "useStatus", label: "상태", minWidth: "100px", filterOptions: USE_STATUS_OPTIONS },
   { key: "phone", label: "연락처", minWidth: "140px" },
   { key: "carrier", label: "통신사", minWidth: "130px", filterOptions: CARRIER_OPTIONS },
-  { key: "corpNames", label: "법인", minWidth: "180px" },
   { key: "loginId", label: "아이디", minWidth: "120px" },
   { key: "loginPw", label: "비밀번호", minWidth: "100px" },
   { key: "cost", label: "통신비용", minWidth: "120px" },
@@ -102,7 +108,8 @@ const columns: Column[] = [
   { key: "registeredAt", label: "등록일", minWidth: "110px" },
 ]
 
-const stickyOffsets = [0, 110, 250]
+const STICKY_COLS = 2
+const stickyOffsets = [0, CORP_COL_WIDTH]
 
 function CarrierBadge({ carrier }: { carrier: string }) {
   return (
@@ -143,12 +150,27 @@ type FormData = {
   siteUrl: string
   loginId: string
   loginPw: string
+  useStatus: string
+}
+
+const isUnused = (r: { useStatus?: string }) => r.useStatus === "미사용"
+
+function UseStatusBadge({ status }: { status?: string }) {
+  const unused = status === "미사용"
+  return (
+    <span className={cn(
+      "inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium",
+      unused ? "bg-zinc-200 text-zinc-600" : "bg-emerald-100 text-emerald-700",
+    )}>
+      {unused ? "미사용" : "사용"}
+    </span>
+  )
 }
 
 const emptyForm: FormData = {
   owner: "", phone: "", carrier: "SKT", cost: "",
   paymentDay: "매월 1일", bankName: "", accountNo: "", memo: "",
-  siteUrl: "", loginId: "", loginPw: "",
+  siteUrl: "", loginId: "", loginPw: "", useStatus: "사용",
 }
 
 /** 스킴이 없으면 https:// 를 붙인다 */
@@ -263,18 +285,29 @@ function TelecomDialog({
               onChange={(v) => set("phone", v)} placeholder="010-0000-0000" />
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="tc-carrier" className="text-xs text-muted-foreground">통신사</Label>
-            <Select value={form.carrier} onValueChange={(v) => set("carrier", v)}>
-              <SelectTrigger id="tc-carrier">
-                <span>{form.carrier}</span>
-              </SelectTrigger>
-              <SelectContent>
-                {CARRIER_OPTIONS.map((o) => (
-                  <SelectItem key={o} value={o}>{o}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="tc-carrier" className="text-xs text-muted-foreground">통신사</Label>
+              <Select value={form.carrier} onValueChange={(v) => set("carrier", v)}>
+                <SelectTrigger id="tc-carrier">
+                  <span>{form.carrier}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  {CARRIER_OPTIONS.map((o) => (
+                    <SelectItem key={o} value={o}>{o}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="tc-use-status" className="text-xs text-muted-foreground">상태</Label>
+              <Select value={form.useStatus} onValueChange={(v) => set("useStatus", v ?? "사용")}>
+                <SelectTrigger id="tc-use-status"><span>{form.useStatus}</span></SelectTrigger>
+                <SelectContent>
+                  {USE_STATUS_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -407,8 +440,10 @@ export function TelecomView() {
   }, [rows, filters, corpNamesByCeo])
 
   // 통신 비용 합계 (전체 / 필터 적용 시 표시 중인 항목)
-  const totalCost = useMemo(() => rows.reduce((sum, r) => sum + (Number(r.cost) || 0), 0), [rows])
-  const filteredCost = useMemo(() => filteredRows.reduce((sum, r) => sum + (Number(r.cost) || 0), 0), [filteredRows])
+  // 합계·미납 건수는 미사용 항목 제외
+  const totalCost = useMemo(() => rows.filter((r) => !isUnused(r)).reduce((sum, r) => sum + (Number(r.cost) || 0), 0), [rows])
+  const filteredCost = useMemo(() => filteredRows.filter((r) => !isUnused(r)).reduce((sum, r) => sum + (Number(r.cost) || 0), 0), [filteredRows])
+  const unusedCount = rows.filter(isUnused).length
   const isFiltered = filteredRows.length !== rows.length
 
   // 입금 기한: 매월 말일
@@ -419,7 +454,7 @@ export function TelecomView() {
     const daysLeft = Math.round((lastDay.getTime() - today.getTime()) / 86_400_000)
     return { month: lastDay.getMonth() + 1, day: lastDay.getDate(), daysLeft }
   }, [viewYear, viewMonth])
-  const unpaidCount = rows.filter((r) => !r.paidThisMonth).length
+  const unpaidCount = rows.filter((r) => !r.paidThisMonth && !isUnused(r)).length
 
   const loadPayments = useCallback(async (id: number) => {
     setPaymentsLoading(true)
@@ -448,6 +483,7 @@ export function TelecomView() {
       owner: detail.owner,
       phone: detail.phone,
       carrier: detail.carrier,
+      useStatus: detail.useStatus ?? "사용",
       cost: toCommaNumber(String(Math.round(detail.cost))),
       paymentDay: detail.paymentDay,
       bankName: detail.bankName,
@@ -466,6 +502,7 @@ export function TelecomView() {
     editForm.owner !== detail.owner ||
     editForm.phone !== detail.phone ||
     editForm.carrier !== detail.carrier ||
+    editForm.useStatus !== (detail.useStatus ?? "사용") ||
     (Number(editForm.cost.replace(/,/g, "")) || 0) !== Math.round(Number(detail.cost) || 0) ||
     editForm.paymentDay !== detail.paymentDay ||
     editForm.bankName !== detail.bankName ||
@@ -485,6 +522,7 @@ export function TelecomView() {
         owner: editForm.owner,
         phone: editForm.phone,
         carrier: editForm.carrier,
+        useStatus: editForm.useStatus || "사용",
         cost: Number(editForm.cost.replace(/,/g, "")) || 0,
         paymentDay: editForm.paymentDay,
         bankName: editForm.bankName,
@@ -615,6 +653,7 @@ export function TelecomView() {
         phone: data.phone,
         carrier: data.carrier,
         cost: Number(data.cost.replace(/,/g, "")) || 0,
+        useStatus: data.useStatus || "사용",
         paymentDay: data.paymentDay,
         bankName: data.bankName,
         accountNo: data.accountNo,
@@ -747,7 +786,7 @@ export function TelecomView() {
               ? "불러오는 중..."
               : isFiltered
                 ? `필터 적용 ${filteredRows.length}건 합계 ₩${Math.round(filteredCost).toLocaleString("ko-KR")}`
-                : `전체 ${rows.length}건 기준`}
+                : `전체 ${rows.length}건 기준${unusedCount ? ` (미사용 ${unusedCount}건 제외)` : ""}`}
             {" · 잔액 합계 "}₩{Math.round(rows.reduce((s, r) => s + (Number(r.balance) || 0), 0)).toLocaleString("ko-KR")}
           </p>
         </div>
@@ -791,11 +830,12 @@ export function TelecomView() {
                       key={col.key}
                       className={cn(
                         "border-b border-border bg-muted px-3 py-2.5 align-middle font-medium",
-                        colIdx < 3 && "sm:sticky sm:z-10",
+                        colIdx < STICKY_COLS && "sm:sticky sm:z-10",
                       )}
                       style={{
                         minWidth: col.minWidth,
-                        left: colIdx < 3 ? stickyOffsets[colIdx] : undefined,
+                        ...(col.key === "corpNames" ? { width: CORP_COL_WIDTH, maxWidth: CORP_COL_WIDTH } : {}),
+                        left: colIdx < STICKY_COLS ? stickyOffsets[colIdx] : undefined,
                       }}
                     >
                       {col.filterOptions ? (
@@ -838,7 +878,7 @@ export function TelecomView() {
                   </tr>
                 ) : (
                   filteredRows.map((row) => (
-                    <tr key={row.id} className="group cursor-pointer border-b border-border/50 transition-colors last:border-0 hover:bg-accent/50" onClick={() => openDetail(row)}>
+                    <tr key={row.id} className={cn("group cursor-pointer border-b border-border/50 transition-colors last:border-0 hover:bg-accent/50", isUnused(row) && "bg-muted/40 text-muted-foreground opacity-60")} onClick={() => openDetail(row)}>
                       {bulkMode && (
                         <td className="w-10 px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                           <input type="checkbox"
@@ -858,12 +898,20 @@ export function TelecomView() {
                         <td
                           key={col.key}
                           className={cn(
-                            "whitespace-nowrap px-3 py-2.5 text-foreground",
-                            colIdx < 3 && "sm:sticky sm:z-10 bg-card group-hover:bg-accent",
+                            "px-3 py-2.5 text-foreground",
+                            col.key === "corpNames" ? "whitespace-normal break-keep text-xs leading-snug" : "whitespace-nowrap",
+                            colIdx < STICKY_COLS && "sm:sticky sm:z-10 bg-card group-hover:bg-accent",
                           )}
-                          style={{ left: colIdx < 3 ? stickyOffsets[colIdx] : undefined }}
+                          style={{
+                            left: colIdx < STICKY_COLS ? stickyOffsets[colIdx] : undefined,
+                            ...(col.key === "corpNames" ? { width: CORP_COL_WIDTH, minWidth: CORP_COL_WIDTH, maxWidth: CORP_COL_WIDTH } : {}),
+                          }}
                         >
-                          {col.key === "owner" ? (
+                          {col.key === "useStatus" ? (
+                            <UseStatusBadge status={row.useStatus} />
+                          ) : col.key === "corpNames" ? (
+                            <span className={row.corpNames ? "text-foreground" : "text-muted-foreground"}>{row.corpNames || "-"}</span>
+                          ) : col.key === "owner" ? (
                             <CopyText value={(row.owner ?? "").trim()} label="이름" className="font-medium" />
                           ) : col.key === "carrier" ? (
                             <CarrierLink row={row} />
@@ -889,7 +937,9 @@ export function TelecomView() {
                         </td>
                       ))}
                       <td className="sticky right-0 z-10 border-l border-border bg-card px-2 py-1.5 text-center group-hover:bg-accent" onClick={(e) => e.stopPropagation()}>
-                        {row.paidThisMonth ? (
+                        {isUnused(row) ? (
+                          <span className="text-xs text-muted-foreground">미사용</span>
+                        ) : row.paidThisMonth ? (
                           <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
                             <Check className="h-3 w-3" aria-hidden="true" />
                             완료{row.paidDateThisMonth ? ` ${row.paidDateThisMonth.slice(5).replace("-", "/")}` : ""}
@@ -944,8 +994,8 @@ export function TelecomView() {
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>일괄 납입 완료</DialogTitle></DialogHeader>
           <p className="py-2 text-sm text-muted-foreground">
-            선택한 항목 중 {viewMonth}월 미납 <span className="font-semibold text-foreground">{rows.filter((r) => selectedIds.has(r.id) && !r.paidThisMonth).length}건</span>을 납입 완료 처리합니다.<br />
-            합계 <span className="font-semibold text-foreground">₩{Math.round(rows.filter((r) => selectedIds.has(r.id) && !r.paidThisMonth).reduce((s, r) => s + r.cost, 0)).toLocaleString("ko-KR")}</span>이 각 잔액에 더해집니다. 이미 완료된 항목은 건너뜁니다.
+            선택한 항목 중 {viewMonth}월 미납 <span className="font-semibold text-foreground">{rows.filter((r) => selectedIds.has(r.id) && !r.paidThisMonth && !isUnused(r)).length}건</span>을 납입 완료 처리합니다.<br />
+            합계 <span className="font-semibold text-foreground">₩{Math.round(rows.filter((r) => selectedIds.has(r.id) && !r.paidThisMonth && !isUnused(r)).reduce((s, r) => s + r.cost, 0)).toLocaleString("ko-KR")}</span>이 각 잔액에 더해집니다. 이미 완료됐거나 미사용인 항목은 건너뜁니다.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBulkCompleteConfirm(false)}>취소</Button>
@@ -992,14 +1042,25 @@ export function TelecomView() {
                         <Field id="edit-owner" label="명의자" value={editForm.owner} onChange={(v) => setEditForm((p) => ({ ...p, owner: v }))} placeholder="예: 김대표" />
                         <Field id="edit-phone" label="연락처" value={editForm.phone} onChange={(v) => setEditForm((p) => ({ ...p, phone: v }))} placeholder="010-0000-0000" />
                       </div>
-                      <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="edit-carrier" className="text-xs text-muted-foreground">통신사</Label>
-                        <Select value={editForm.carrier} onValueChange={(v) => setEditForm((p) => ({ ...p, carrier: v }))}>
-                          <SelectTrigger id="edit-carrier"><span>{editForm.carrier}</span></SelectTrigger>
-                          <SelectContent>
-                            {CARRIER_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <Label htmlFor="edit-carrier" className="text-xs text-muted-foreground">통신사</Label>
+                          <Select value={editForm.carrier} onValueChange={(v) => setEditForm((p) => ({ ...p, carrier: v }))}>
+                            <SelectTrigger id="edit-carrier"><span>{editForm.carrier}</span></SelectTrigger>
+                            <SelectContent>
+                              {CARRIER_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <Label htmlFor="edit-use-status" className="text-xs text-muted-foreground">상태 ({viewMonth}월부터 적용)</Label>
+                          <Select value={editForm.useStatus} onValueChange={(v) => setEditForm((p) => ({ ...p, useStatus: v ?? "사용" }))}>
+                            <SelectTrigger id="edit-use-status"><span>{editForm.useStatus}</span></SelectTrigger>
+                            <SelectContent>
+                              {USE_STATUS_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <Field id="edit-cost" label="통신비용 (원)" value={editForm.cost} onChange={(v) => setEditForm((p) => ({ ...p, cost: toCommaNumber(v) }))} placeholder="예: 89,000" />
@@ -1034,7 +1095,7 @@ export function TelecomView() {
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[11px] text-muted-foreground">통신사</span>
-                      <CarrierLink row={detail} />
+                      <span className="flex items-center gap-1.5"><CarrierLink row={detail} /><UseStatusBadge status={detail.useStatus} /></span>
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[11px] text-muted-foreground">통신비용</span>
@@ -1176,7 +1237,7 @@ export function TelecomView() {
                   <>
                     <Button
                       className="mr-auto gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-                      disabled={completingId === detail.id || !!detail.paidThisMonth}
+                      disabled={completingId === detail.id || !!detail.paidThisMonth || isUnused(detail)}
                       onClick={() => setCompleteTarget(detail)}
                     >
                       <Check className="h-3.5 w-3.5" />
