@@ -623,6 +623,25 @@ export function TelecomView() {
     }
   }
 
+  // 해당 월 납입 완료 취소 (그 달 납입 기록 삭제 + 잔액 차감)
+  const [cancelTarget, setCancelTarget] = useState<Telecom | null>(null)
+  const [cancelling, setCancelling] = useState(false)
+  async function handleCancelPayment(row: Telecom) {
+    setCancelling(true)
+    setSubmitError(null)
+    try {
+      const updated = await api.delete<Telecom>(`/api/telecoms/${row.id}/complete-payment?yearMonth=${ym}`)
+      setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
+      if (detail?.id === updated.id) { setDetail(updated); void loadPayments(updated.id) }
+      flash(`${updated.owner} ${viewMonth}월 납입 완료를 취소했습니다.`)
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "납입 취소에 실패했습니다.")
+    } finally {
+      setCancelling(false)
+      setCancelTarget(null)
+    }
+  }
+
   // 일괄 납입 완료
   async function handleBulkComplete() {
     setBulkCompleting(true)
@@ -880,7 +899,7 @@ export function TelecomView() {
                       )}
                     </th>
                   ))}
-                  <th className="sticky right-0 z-10 border-b border-l border-border bg-muted px-3 py-2.5 text-center font-medium whitespace-nowrap">납입</th>
+                  <th className="sticky right-0 z-10 border-b border-l border-border bg-muted px-3 py-2.5 text-center font-medium whitespace-nowrap">{viewMonth}월 납입 상태</th>
                 </tr>
               </thead>
               <tbody>
@@ -954,21 +973,29 @@ export function TelecomView() {
                         {isUnused(row) ? (
                           <span className="text-xs text-muted-foreground">미사용</span>
                         ) : row.paidThisMonth ? (
-                          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                            <Check className="h-3 w-3" aria-hidden="true" />
-                            완료{row.paidDateThisMonth ? ` ${row.paidDateThisMonth.slice(5).replace("-", "/")}` : ""}
-                          </span>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                              <Check className="h-3 w-3" aria-hidden="true" />
+                              납입 완료{row.paidDateThisMonth ? ` ${row.paidDateThisMonth.slice(5).replace("-", "/")}` : ""}
+                            </span>
+                            <button type="button" className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-destructive" onClick={() => setCancelTarget(row)}>
+                              취소
+                            </button>
+                          </div>
                         ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 gap-1 border-emerald-300 px-2 text-xs text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
-                            disabled={completingId === row.id}
-                            onClick={() => setCompleteTarget(row)}
-                          >
-                            <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                            {completingId === row.id ? "처리 중" : "납입 완료"}
-                          </Button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span className="whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">납입 전</span>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 gap-1 border-emerald-300 px-2 text-xs text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                              disabled={completingId === row.id}
+                              onClick={() => setCompleteTarget(row)}
+                            >
+                              <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                              {completingId === row.id ? "처리 중" : "납입 완료"}
+                            </Button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -998,6 +1025,25 @@ export function TelecomView() {
             <Button variant="outline" onClick={() => setCompleteTarget(null)}>취소</Button>
             <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={completingId !== null} onClick={() => completeTarget && void handleCompletePayment(completeTarget)}>
               {completingId !== null ? "처리 중..." : "납입 완료"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 납입 완료 취소 확인 */}
+      <Dialog open={!!cancelTarget} onOpenChange={(o) => { if (!o) setCancelTarget(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>납입 완료 취소</DialogTitle></DialogHeader>
+          {cancelTarget && (
+            <p className="py-2 text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">{cancelTarget.owner}</span>님 {viewMonth}월 납입 완료를 취소합니다.<br />
+              {viewMonth}월 납입 기록이 삭제되고, 잔액에서 해당 금액이 차감됩니다.
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelTarget(null)}>닫기</Button>
+            <Button variant="destructive" disabled={cancelling} onClick={() => cancelTarget && void handleCancelPayment(cancelTarget)}>
+              {cancelling ? "처리 중..." : "납입 취소"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1249,14 +1295,20 @@ export function TelecomView() {
                   </>
                 ) : (
                   <>
-                    <Button
-                      className="mr-auto gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-                      disabled={completingId === detail.id || !!detail.paidThisMonth || isUnused(detail)}
-                      onClick={() => setCompleteTarget(detail)}
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                      {detail.paidThisMonth ? `${viewMonth}월 납입 완료됨` : completingId === detail.id ? "처리 중..." : `${viewMonth}월 납입 완료`}
-                    </Button>
+                    {detail.paidThisMonth ? (
+                      <Button variant="outline" className="mr-auto gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive" disabled={cancelling} onClick={() => setCancelTarget(detail)}>
+                        {viewMonth}월 납입 취소
+                      </Button>
+                    ) : (
+                      <Button
+                        className="mr-auto gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                        disabled={completingId === detail.id || isUnused(detail)}
+                        onClick={() => setCompleteTarget(detail)}
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        {completingId === detail.id ? "처리 중..." : `${viewMonth}월 납입 완료`}
+                      </Button>
+                    )}
                     <Button variant="outline" className="gap-1.5" onClick={startEdit}>
                       <Pencil className="h-3.5 w-3.5" />수정
                     </Button>
