@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { cn, toCommaNumber } from "@/lib/utils"
 import { api, ApiError } from "@/lib/api"
+import { FixedExpenseItemDetail } from "@/components/erp/fixed-expense-item-detail"
 
-type Item = { id: number; itemName: string; createdAt: string }
+type Item = { id: number; itemName: string; detail?: string; createdAt: string }
 type Entry = {
   id: number
   itemId: number
@@ -93,6 +94,8 @@ export function FixedExpenseView() {
   // 완료된 행 중 수정 버튼을 눌러 편집 중인 행
   const [editingIds, setEditingIds] = useState<Set<number>>(new Set())
   const [rowSavingIds, setRowSavingIds] = useState<Set<number>>(new Set())
+  // 세부내역 창에서 보고 있는 항목
+  const [detailItem, setDetailItem] = useState<Item | null>(null)
 
   function prevMonth() {
     if (month === 1) { setYear((y) => y - 1); setMonth(12) }
@@ -523,13 +526,21 @@ export function FixedExpenseView() {
                       />
                     </td>
                     <td className="px-4 py-2 font-medium">
-                      <span className={cn(completed && "text-muted-foreground line-through decoration-muted-foreground/60")}>
+                      <button
+                        type="button"
+                        onClick={() => setDetailItem(item)}
+                        title="세부내역 보기"
+                        className={cn("text-left hover:text-primary hover:underline underline-offset-2", completed && "text-muted-foreground line-through decoration-muted-foreground/60")}
+                      >
                         {item.itemName}
-                      </span>
+                      </button>
                       {completed && entry?.completedAt && (
                         <span className="ml-2 inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
                           {formatCompletedAt(entry.completedAt)}
                         </span>
+                      )}
+                      {item.detail && (
+                        <p className="mt-0.5 max-w-[260px] truncate text-[11px] font-normal text-muted-foreground" title={item.detail}>{item.detail.split(/\r?\n/)[0]}</p>
                       )}
                       {row.error && <p className="text-[11px] text-destructive mt-0.5">{row.error}</p>}
                     </td>
@@ -600,6 +611,15 @@ export function FixedExpenseView() {
           )}
         </table>
       </div>
+
+      <FixedExpenseItemDetail
+        item={detailItem}
+        onClose={() => setDetailItem(null)}
+        onSaved={(updated) => {
+          setItems((prev) => prev.map((i) => (i.id === updated.id ? { ...i, ...updated } : i)))
+          setDetailItem((cur) => (cur && cur.id === updated.id ? { ...cur, ...updated } : cur))
+        }}
+      />
 
       {/* 일괄 삭제 확인 */}
       <Dialog open={bulkConfirm} onOpenChange={(o) => { if (!o) setBulkConfirm(false) }}>
