@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { ChangeHistory } from "@/components/erp/change-history"
 import { ApiError, api } from "@/lib/api"
 
-export type FixedExpenseItem = { id: number; itemName: string; detail?: string; createdAt: string }
+export type FixedExpenseItem = { id: number; itemName: string; detail?: string; oneTimeMonth?: string | null; createdAt: string }
 
 type HistoryEntry = {
   id: number
@@ -80,7 +80,12 @@ export function FixedExpenseItemDetail({
         {item && (
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="fe-item-name" className="text-xs text-muted-foreground">항목명</Label>
+              <Label htmlFor="fe-item-name" className="flex items-center gap-2 text-xs text-muted-foreground">
+                항목명
+                <span className={item.oneTimeMonth ? "rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700" : "rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"}>
+                  {item.oneTimeMonth ? `단발성 · ${item.oneTimeMonth}` : "지속성 · 매달 이어짐"}
+                </span>
+              </Label>
               <Input id="fe-item-name" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1.5">

@@ -9,7 +9,7 @@ import { cn, toCommaNumber } from "@/lib/utils"
 import { api, ApiError } from "@/lib/api"
 import { FixedExpenseItemDetail } from "@/components/erp/fixed-expense-item-detail"
 
-type Item = { id: number; itemName: string; detail?: string; createdAt: string }
+type Item = { id: number; itemName: string; detail?: string; oneTimeMonth?: string | null; createdAt: string }
 type Entry = {
   id: number
   itemId: number
@@ -82,6 +82,8 @@ export function FixedExpenseView() {
 
   const [newItemName, setNewItemName] = useState("")
   const [addLoading, setAddLoading] = useState(false)
+  // 추가할 항목 종류: 지속성(매달) / 단발성(이번 달만)
+  const [newItemOneTime, setNewItemOneTime] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
 
   const [deleteTarget, setDeleteTarget] = useState<Item | null>(null)
@@ -111,7 +113,7 @@ export function FixedExpenseView() {
     setError(null)
     try {
       const [itemList, entryList] = await Promise.all([
-        api.get<Item[]>("/api/fixed-expense-items"),
+        api.get<Item[]>(`/api/fixed-expense-items?year=${y}&month=${m}`),
         api.get<Entry[]>(`/api/fixed-expense-entries?year=${y}&month=${m}`),
       ])
       setItems([...itemList].sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
@@ -145,7 +147,10 @@ export function FixedExpenseView() {
     }
     setAddLoading(true)
     try {
-      const created = await api.post<Item>("/api/fixed-expense-items", { itemName: name })
+      const created = await api.post<Item>("/api/fixed-expense-items", {
+        itemName: name,
+        oneTimeMonth: newItemOneTime ? `${year}-${String(month).padStart(2, "0")}` : null,
+      })
       setItems((prev) => [...prev, created])
       setRowStates((prev) => ({ ...prev, [created.id]: makeRowState() }))
       setNewItemName("")
@@ -417,7 +422,25 @@ export function FixedExpenseView() {
       )}
 
       {/* 항목 추가 영역 - 테이블 밖 */}
-      <div className="flex items-center gap-2 rounded-lg border border-dashed border-border bg-muted/20 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-border bg-muted/20 px-4 py-3">
+        <div className="inline-flex shrink-0 rounded-md border border-border bg-background p-0.5" role="radiogroup" aria-label="항목 종류">
+          {([[false, "지속성", "매달 이어짐"], [true, "단발성", `${month}월만`]] as const).map(([oneTime, label, hint]) => (
+            <button
+              key={label}
+              type="button"
+              role="radio"
+              aria-checked={newItemOneTime === oneTime}
+              title={hint}
+              onClick={() => setNewItemOneTime(oneTime)}
+              className={cn(
+                "rounded px-3 py-1.5 text-xs font-medium transition-colors",
+                newItemOneTime === oneTime ? (oneTime ? "bg-amber-500 text-white" : "bg-primary text-primary-foreground") : "text-muted-foreground hover:bg-muted",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <Input
           ref={nameInputRef}
           value={newItemName}
@@ -436,7 +459,9 @@ export function FixedExpenseView() {
           <Plus className="h-4 w-4" />
           {addLoading ? "추가 중..." : "추가"}
         </Button>
-        <span className="text-xs text-muted-foreground">항목명 입력 후 추가 버튼 또는 Enter</span>
+        <span className="text-xs text-muted-foreground">
+          {newItemOneTime ? `단발성: ${year}년 ${month}월에만 표시됩니다.` : "지속성: 매달 표시되고 날짜·금액이 다음 달로 이어집니다."}
+        </span>
       </div>
 
       {/* 테이블 */}
@@ -534,6 +559,9 @@ export function FixedExpenseView() {
                       >
                         {item.itemName}
                       </button>
+                      {item.oneTimeMonth && (
+                        <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700" title={`${item.oneTimeMonth} 한 달만 표시되는 항목`}>단발성</span>
+                      )}
                       {completed && entry?.completedAt && (
                         <span className="ml-2 inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
                           {formatCompletedAt(entry.completedAt)}
